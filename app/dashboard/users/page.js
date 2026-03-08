@@ -1,0 +1,255 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { toast } from 'sonner'
+import { UserPlus, Users, Mail } from 'lucide-react'
+
+export default function UsersPage() {
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState('STAFF')
+  const [inviteFirstName, setInviteFirstName] = useState('')
+  const [inviteLastName, setInviteLastName] = useState('')
+  const [inviting, setInviting] = useState(false)
+  const [inviteSent, setInviteSent] = useState(false)
+  const supabase = createClient()
+
+  useEffect(() => { load() }, [])
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      // Use API route to get users with emails (merged from auth.users)
+      const res = await fetch('/api/users')
+      if (res.ok) {
+        const data = await res.json()
+        setUsers(data.users || [])
+      } else {
+        // Fallback: load profiles only
+        const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
+        setUsers(data || [])
+      }
+    } catch {
+      const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
+      setUsers(data || [])
+    }
+    setLoading(false)
+  }
+
+  const inviteUser = async () => {
+    if (!inviteEmail) { toast.error('Email is required'); return }
+    setInviting(true)
+    try {
+      const res = await fetch('/api/users/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: inviteEmail,
+          role: inviteRole,
+          firstName: inviteFirstName,
+          lastName: inviteLastName,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Invite failed')
+      setInviteSent(true)
+      toast.success(data.message || `Invitation sent to ${inviteEmail}`)
+      load()
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  const resetInviteForm = () => {
+    setInviteOpen(false)
+    setInviteEmail('')
+    setInviteFirstName('')
+    setInviteLastName('')
+    setInviteRole('STAFF')
+    setInviteSent(false)
+  }
+
+  const toggleRole = async (userId, newRole) => {
+    const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId)
+    if (error) { toast.error(error.message); return }
+    toast.success('Role updated')
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u))
+  }
+
+  const toggleActive = async (userId, isActive) => {
+    const { error } = await supabase.from('profiles').update({ is_active: !isActive }).eq('id', userId)
+    if (error) { toast.error(error.message); return }
+    toast.success(isActive ? 'User deactivated' : 'User activated')
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_active: !isActive } : u))
+  }
+
+  const getDisplayName = (u) => {
+    const name = `${u.first_name || ''} ${u.last_name || ''}`.trim()
+    return name || '(Name not set)'
+  }
+
+  if (loading) return <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-outfit font-bold">User Management</h1>
+          <p className="text-sm text-muted-foreground">{users.length} users</p>
+        </div>
+        <Button onClick={() => setInviteOpen(true)}>
+          <UserPlus className="w-4 h-4 mr-2" /> Invite User
+        </Button>
+      </div>
+
+      <Card>
+        <CardContent className="pt-4">
+          <div className="rounded-lg border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Joined</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {users.length === 0 ? (
+                  <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                    <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                    No users yet. Invite someone to get started.
+                  </TableCell></TableRow>
+                ) : users.map(u => (
+                  <TableRow key={u.id} className="hover:bg-muted/30">
+                    <TableCell>
+                      <div>
+                        <p className={`font-medium text-sm ${
+                          !u.first_name && !u.last_name ? 'text-muted-foreground italic' : ''
+                        }`}>{getDisplayName(u)}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      <div className="flex items-center gap-1">
+                        <Mail className="w-3 h-3" />
+                        {u.email || <span className="italic">Not available</span>}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Select value={u.role || 'STAFF'} onValueChange={v => toggleRole(u.id, v)}>
+                        <SelectTrigger className="w-28 h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ADMIN">ADMIN</SelectItem>
+                          <SelectItem value="STAFF">STAFF</SelectItem>
+                          <SelectItem value="VIEWER">VIEWER</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={u.is_active !== false
+                        ? 'bg-green-50 text-green-700 border-green-200'
+                        : 'bg-red-50 text-red-700 border-red-200'
+                      }>{u.is_active !== false ? 'Active' : 'Inactive'}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs"
+                        onClick={() => toggleActive(u.id, u.is_active !== false)}>
+                        {u.is_active !== false ? 'Deactivate' : 'Activate'}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Invite User Modal */}
+      <Dialog open={inviteOpen} onOpenChange={(open) => { if (!open) resetInviteForm(); else setInviteOpen(true) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><UserPlus className="w-4 h-4" /> Invite New User</DialogTitle>
+          </DialogHeader>
+
+          {inviteSent ? (
+            <div className="text-center py-6 space-y-3">
+              <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                <Mail className="w-7 h-7 text-green-600" />
+              </div>
+              <h3 className="font-semibold text-lg">Invitation Sent!</h3>
+              <p className="text-sm text-muted-foreground">
+                An invite email was sent to <strong>{inviteEmail}</strong>.<br />
+                They&apos;ll receive a link to set their password and access the CRM.
+              </p>
+              <div className="flex gap-2 justify-center pt-2">
+                <Button variant="outline" onClick={resetInviteForm}>Close</Button>
+                <Button onClick={() => { setInviteSent(false); setInviteEmail(''); setInviteFirstName(''); setInviteLastName('') }}>
+                  Invite Another
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4 pt-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>First Name</Label>
+                  <Input value={inviteFirstName} onChange={e => setInviteFirstName(e.target.value)} placeholder="John" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Last Name</Label>
+                  <Input value={inviteLastName} onChange={e => setInviteLastName(e.target.value)} placeholder="Doe" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Email Address <span className="text-destructive">*</span></Label>
+                <Input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
+                  placeholder="user@company.com" type="email" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Role</Label>
+                <Select value={inviteRole} onValueChange={setInviteRole}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ADMIN">Admin</SelectItem>
+                    <SelectItem value="STAFF">Staff</SelectItem>
+                    <SelectItem value="VIEWER">Viewer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 text-xs text-muted-foreground">
+                <strong>How it works:</strong> The user will receive an email with a secure link to set their password. Once they click it, they&apos;ll be signed in and can access the CRM.
+              </div>
+              <div className="flex gap-2 justify-end pt-1">
+                <Button variant="outline" onClick={resetInviteForm}>Cancel</Button>
+                <Button onClick={inviteUser} disabled={inviting}>
+                  <Mail className="w-4 h-4 mr-2" />
+                  {inviting ? 'Sending...' : 'Send Invite Email'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
