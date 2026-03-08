@@ -136,6 +136,7 @@ export default function UsersPage() {
   }
 
   const getDisplayName = (u) => {
+    if (!u) return ''
     const name = `${u.first_name || ''} ${u.last_name || ''}`.trim()
     return name || '(Name not set)'
   }
