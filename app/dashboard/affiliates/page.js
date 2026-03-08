@@ -193,7 +193,7 @@ export default function AffiliatesPage() {
     return true
   })
 
-  const openAdd = () => { setEditTarget(null); setForm(EMPTY_FORM); setAddOpen(true) }
+  const openAdd = () => { setEditTarget(null); setForm({ ...EMPTY_FORM, manager_id: isAdmin ? 'none' : userId }); setAddOpen(true) }
   const openEdit = (a, e) => {
     e?.stopPropagation()
     setEditTarget(a)
@@ -269,7 +269,7 @@ export default function AffiliatesPage() {
           <p className="text-sm text-muted-foreground">{affiliates.length} total &bull; {filtered.length} shown</p>
         </div>
         <div className="flex items-center gap-2">
-          {selected.size > 0 && (
+          {isAdmin && selected.size > 0 && (
             <Button variant="destructive" size="sm" onClick={() => setDeleteConfirm(true)}>
               <Trash2 className="w-4 h-4 mr-1" /> Delete {selected.size}
             </Button>
@@ -317,7 +317,7 @@ export default function AffiliatesPage() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50">
-                  <TableHead className="w-10"><Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} /></TableHead>
+                  {isAdmin && <TableHead className="w-10"><Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} /></TableHead>}
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Status</TableHead>
@@ -330,13 +330,13 @@ export default function AffiliatesPage() {
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
+                  <TableRow><TableCell colSpan={isAdmin ? 9 : 8} className="text-center py-10 text-muted-foreground">
                     <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
                     No affiliates found. Click &ldquo;Add Affiliate&rdquo; to get started.
                   </TableCell></TableRow>
                 ) : filtered.map(a => (
                   <TableRow key={a.id} className={`cursor-pointer hover:bg-muted/30 transition-colors ${selected.has(a.id) ? 'bg-blue-50/50' : ''}`} onClick={() => router.push(`/dashboard/affiliates/${a.id}`)}>
-                    <TableCell onClick={e => e.stopPropagation()}><Checkbox checked={selected.has(a.id)} onCheckedChange={() => toggleSelect(a.id)} /></TableCell>
+                    {isAdmin && <TableCell onClick={e => e.stopPropagation()}><Checkbox checked={selected.has(a.id)} onCheckedChange={() => toggleSelect(a.id)} /></TableCell>}
                     <TableCell className="font-medium">{a.name}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{a.email}</TableCell>
                     <TableCell><Badge className={STATUS_COLORS[a.status] || ''}>{a.status}</Badge></TableCell>
