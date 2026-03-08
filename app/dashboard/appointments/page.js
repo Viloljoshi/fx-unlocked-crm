@@ -37,6 +37,7 @@ export default function AppointmentsPage() {
   const supabase = createClient()
   const { userId, role, loading: roleLoading } = useUserRole()
   const isAdmin = role === 'ADMIN'
+  const canWrite = role === 'ADMIN' || role === 'STAFF'
 
   useEffect(() => {
     if (roleLoading || !userId || !role) return
@@ -156,9 +157,9 @@ export default function AppointmentsPage() {
           <p className="text-sm text-muted-foreground">{upcomingCount} upcoming{urgentCount>0&&<span className="text-orange-600 font-medium ml-2">&bull; {urgentCount} in next 48h</span>}</p>
         </div>
         <div className="flex items-center gap-2">
-          {selected.size>0&&<Button variant="destructive" size="sm" onClick={()=>setDeleteConfirm(true)}><Trash2 className="w-4 h-4 mr-1" />Delete {selected.size}</Button>}
+          {canWrite && selected.size>0&&<Button variant="destructive" size="sm" onClick={()=>setDeleteConfirm(true)}><Trash2 className="w-4 h-4 mr-1" />Delete {selected.size}</Button>}
           <Button variant="outline" size="sm" onClick={exportCSV}><Download className="w-4 h-4 mr-1" />Export</Button>
-          <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-1" />Schedule</Button>
+          {canWrite && <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-1" />Schedule</Button>}
         </div>
       </div>
 
@@ -182,15 +183,15 @@ export default function AppointmentsPage() {
               <Calendar className="w-12 h-12 mx-auto mb-3 opacity-20" />
               <p className="font-medium">{statusFilter==='upcoming'?'No upcoming appointments':'No appointments found'}</p>
               <p className="text-sm mt-1 mb-4">Schedule calls, meetings, and follow-ups with your affiliates</p>
-              <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-1" />Schedule first appointment</Button>
+              {canWrite && <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-1" />Schedule first appointment</Button>}
             </div>
           ) : (
             <div className="space-y-6">
               {/* Select all for visible */}
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              {canWrite && <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Checkbox checked={selected.size===filtered.length&&filtered.length>0} onCheckedChange={toggleAll} />
                 <span>Select all {filtered.length} visible</span>
-              </div>
+              </div>}
               {Object.entries(grouped).map(([date,appts]) => {
                 const isPast = new Date(appts[0].scheduled_at)<now
                 return (
@@ -209,7 +210,7 @@ export default function AppointmentsPage() {
                         return (
                           <div key={a.id} className={`flex items-start gap-3 p-4 rounded-xl border transition-all cursor-pointer ${selected.has(a.id)?'bg-blue-50/50 border-blue-200':isVU?'bg-red-50/40 border-red-200':isU?'bg-orange-50/40 border-orange-200':isPast?'bg-muted/20 border-transparent opacity-70':'bg-card border-border hover:border-primary/30 hover:shadow-sm'}`}
                             onClick={()=>openEdit(a)}>
-                            <div onClick={e=>e.stopPropagation()} className="pt-1"><Checkbox checked={selected.has(a.id)} onCheckedChange={()=>toggleSelect(a.id)} /></div>
+                            {canWrite && <div onClick={e=>e.stopPropagation()} className="pt-1"><Checkbox checked={selected.has(a.id)} onCheckedChange={()=>toggleSelect(a.id)} /></div>}
                             <div className="shrink-0 w-12 text-center">
                               <p className="text-lg font-outfit font-bold leading-none">{apptDate.getDate()}</p>
                               <p className="text-xs text-muted-foreground">{apptDate.toLocaleString('en',{month:'short'})}</p>
@@ -227,13 +228,13 @@ export default function AppointmentsPage() {
                               </Link>
                               {a.notes&&<p className="text-xs text-muted-foreground mt-1 truncate">{a.notes}</p>}
                             </div>
-                            <div className="flex gap-1.5 shrink-0" onClick={e=>e.stopPropagation()}>
+                            {canWrite && <div className="flex gap-1.5 shrink-0" onClick={e=>e.stopPropagation()}>
                               <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={e=>openEdit(a,e)}><Pencil className="w-3.5 h-3.5" /></Button>
                               {a.status==='SCHEDULED'&&(
                                 <Button size="sm" variant="outline" className="h-8 text-xs text-green-600 border-green-200 hover:bg-green-50" onClick={e=>markStatus(a.id,'COMPLETED',e)}><CheckCircle2 className="w-3.5 h-3.5 mr-1" />Done</Button>
                               )}
                               <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-red-500" title="Delete appointment" onClick={e=>deleteAppointment(a.id,e)}><Trash2 className="w-3.5 h-3.5" /></Button>
-                            </div>
+                            </div>}
                           </div>
                         )
                       })}

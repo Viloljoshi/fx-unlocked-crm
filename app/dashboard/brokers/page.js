@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
 import { Search, Plus, Building2, Download, Trash2, Pencil } from 'lucide-react'
+import { useUserRole } from '@/lib/hooks/useUserRole'
 
 const EMPTY_FORM = {
   name: '', account_manager: '', contact_email: '', contact_phone: '',
@@ -35,6 +36,8 @@ export default function BrokersPage() {
   const [selected, setSelected] = useState(new Set())
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const supabase = createClient()
+  const { role, loading: roleLoading } = useUserRole()
+  const isAdmin = role === 'ADMIN'
 
   useEffect(() => { load() }, [])
 
@@ -108,13 +111,13 @@ export default function BrokersPage() {
           <p className="text-sm text-muted-foreground">{brokers.length} brokers &bull; {filtered.length} shown</p>
         </div>
         <div className="flex items-center gap-2">
-          {selected.size > 0 && (
+          {isAdmin && selected.size > 0 && (
             <Button variant="destructive" size="sm" onClick={() => setDeleteConfirm(true)}>
               <Trash2 className="w-4 h-4 mr-1" /> Delete {selected.size}
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={exportCSV}><Download className="w-4 h-4 mr-1" /> Export CSV</Button>
-          <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-1" /> Add Broker</Button>
+          {isAdmin && <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-1" /> Add Broker</Button>}
         </div>
       </div>
 
@@ -136,7 +139,7 @@ export default function BrokersPage() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50">
-                  <TableHead className="w-10"><Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} /></TableHead>
+                  {isAdmin && <TableHead className="w-10"><Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} /></TableHead>}
                   <TableHead>Name</TableHead>
                   <TableHead>Account Manager</TableHead>
                   <TableHead>Contact</TableHead>
@@ -149,12 +152,12 @@ export default function BrokersPage() {
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
+                  <TableRow><TableCell colSpan={isAdmin ? 9 : 8} className="text-center py-10 text-muted-foreground">
                     <Building2 className="w-8 h-8 mx-auto mb-2 opacity-30" />No brokers found.
                   </TableCell></TableRow>
                 ) : filtered.map(b => (
-                  <TableRow key={b.id} className={`hover:bg-muted/30 cursor-pointer transition-colors ${selected.has(b.id) ? 'bg-blue-50/50' : ''}`} onClick={() => openEdit(b, { stopPropagation: () => {} })}>
-                    <TableCell onClick={e => e.stopPropagation()}><Checkbox checked={selected.has(b.id)} onCheckedChange={() => toggleSelect(b.id)} /></TableCell>
+                  <TableRow key={b.id} className={`hover:bg-muted/30 ${isAdmin ? 'cursor-pointer' : ''} transition-colors ${selected.has(b.id) ? 'bg-blue-50/50' : ''}`} onClick={() => isAdmin && openEdit(b, { stopPropagation: () => {} })}>
+                    {isAdmin && <TableCell onClick={e => e.stopPropagation()}><Checkbox checked={selected.has(b.id)} onCheckedChange={() => toggleSelect(b.id)} /></TableCell>}
                     <TableCell className="font-medium">{b.name}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{b.account_manager || '-'}</TableCell>
                     <TableCell className="text-muted-foreground text-xs">{b.contact_email || '-'}</TableCell>
@@ -162,7 +165,7 @@ export default function BrokersPage() {
                     <TableCell className="font-medium">{affiliateCounts[b.id] || 0}</TableCell>
                     <TableCell className="font-medium text-green-600">${(revenueTotals[b.id]||0).toLocaleString()}</TableCell>
                     <TableCell><Badge className={b.is_active ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}>{b.is_active ? 'Active' : 'Inactive'}</Badge></TableCell>
-                    <TableCell onClick={e => e.stopPropagation()}><Button variant="ghost" size="icon" className="h-7 w-7" onClick={e => openEdit(b, e)}><Pencil className="w-3.5 h-3.5" /></Button></TableCell>
+                    {isAdmin && <TableCell onClick={e => e.stopPropagation()}><Button variant="ghost" size="icon" className="h-7 w-7" onClick={e => openEdit(b, e)}><Pencil className="w-3.5 h-3.5" /></Button></TableCell>}
                   </TableRow>
                 ))}
               </TableBody>

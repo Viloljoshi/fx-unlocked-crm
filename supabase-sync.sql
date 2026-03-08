@@ -1,5 +1,5 @@
 -- ============================================================
--- FX Unlocked CRM — Supabase Migration / Sync Script v4
+-- FX Unlocked CRM — Supabase Migration / Sync Script v5
 -- Run this in: Supabase Dashboard → SQL Editor → New Query
 -- Safe to run multiple times (all statements are idempotent)
 -- ============================================================
@@ -130,7 +130,7 @@ CREATE POLICY "affiliates_update" ON affiliates FOR UPDATE USING (
 
 DROP POLICY IF EXISTS "affiliates_delete" ON affiliates;
 CREATE POLICY "affiliates_delete" ON affiliates FOR DELETE USING (
-  get_user_role() = 'ADMIN'
+  get_user_role() = 'ADMIN' OR manager_id = auth.uid()
 );
 
 -- ── 9. RLS: brokers ──────────────────────────────────────────
@@ -176,7 +176,8 @@ CREATE POLICY "commissions_update" ON commissions FOR UPDATE USING (
 
 DROP POLICY IF EXISTS "commissions_delete" ON commissions;
 CREATE POLICY "commissions_delete" ON commissions FOR DELETE USING (
-  get_user_role() = 'ADMIN'
+  get_user_role() = 'ADMIN' OR
+  affiliate_id IN (SELECT id FROM affiliates WHERE manager_id = auth.uid())
 );
 
 -- ── 11. RLS: appointments ────────────────────────────────────
@@ -293,4 +294,4 @@ CREATE POLICY "audit_logs_insert" ON audit_logs FOR INSERT WITH CHECK (
 --   /dashboard           ← post-login redirect
 
 -- ── Done ─────────────────────────────────────────────────────
-SELECT 'FX Unlocked DB sync v4 complete ✓' AS status;
+SELECT 'FX Unlocked DB sync v5 complete ✓' AS status;

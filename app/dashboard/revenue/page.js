@@ -38,6 +38,7 @@ export default function RevenuePage() {
   const supabase = createClient()
   const { userId, role, loading: roleLoading } = useUserRole()
   const isAdmin = role === 'ADMIN'
+  const canWrite = role === 'ADMIN' || role === 'STAFF'
 
   useEffect(() => {
     if (roleLoading || !userId || !role) return
@@ -152,9 +153,9 @@ export default function RevenuePage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {isAdmin && selected.size > 0 && <Button variant="destructive" size="sm" onClick={()=>setDeleteConfirm(true)}><Trash2 className="w-4 h-4 mr-1" /> Delete {selected.size}</Button>}
+          {canWrite && selected.size > 0 && <Button variant="destructive" size="sm" onClick={()=>setDeleteConfirm(true)}><Trash2 className="w-4 h-4 mr-1" /> Delete {selected.size}</Button>}
           <Button variant="outline" size="sm" onClick={exportCSV}><Download className="w-4 h-4 mr-1" /> Export CSV</Button>
-          <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-1" /> Add Commission</Button>
+          {canWrite && <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-1" /> Add Commission</Button>}
         </div>
       </div>
 
@@ -171,17 +172,17 @@ export default function RevenuePage() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50">
-                  {isAdmin && <TableHead className="w-10"><Checkbox checked={selected.size===filtered.length&&filtered.length>0} onCheckedChange={toggleAll} /></TableHead>}
+                  {canWrite && <TableHead className="w-10"><Checkbox checked={selected.size===filtered.length&&filtered.length>0} onCheckedChange={toggleAll} /></TableHead>}
                   <TableHead>Affiliate</TableHead><TableHead>Broker</TableHead><TableHead>Period</TableHead><TableHead>Deal Type</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead>
                   <TableHead className="w-20">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length===0 ? (
-                  <TableRow><TableCell colSpan={isAdmin ? 8 : 7} className="text-center py-10 text-muted-foreground"><DollarSign className="w-8 h-8 mx-auto mb-2 opacity-30" />No commissions found.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={canWrite ? 8 : 7} className="text-center py-10 text-muted-foreground"><DollarSign className="w-8 h-8 mx-auto mb-2 opacity-30" />No commissions found.</TableCell></TableRow>
                 ) : filtered.map(c => (
                   <TableRow key={c.id} className={`cursor-pointer hover:bg-muted/30 transition-colors ${selected.has(c.id)?'bg-blue-50/50':''}`} onClick={()=>openEdit(c)}>
-                    {isAdmin && <TableCell onClick={e=>e.stopPropagation()}><Checkbox checked={selected.has(c.id)} onCheckedChange={()=>toggleSelect(c.id)} /></TableCell>}
+                    {canWrite && <TableCell onClick={e=>e.stopPropagation()}><Checkbox checked={selected.has(c.id)} onCheckedChange={()=>toggleSelect(c.id)} /></TableCell>}
                     <TableCell className="font-medium">{getAffName(c.affiliate_id)}</TableCell>
                     <TableCell className="text-sm">{getBrkName(c.broker_id)}</TableCell>
                     <TableCell className="text-sm">{MONTHS[c.month]} {c.year}</TableCell>
@@ -190,7 +191,7 @@ export default function RevenuePage() {
                     <TableCell><Badge className={c.status==='PAID'?'bg-green-50 text-green-700 border-green-200':c.status==='AWAITED'?'bg-blue-50 text-blue-700 border-blue-200':c.status==='CANCELLED'?'bg-red-50 text-red-700 border-red-200':'bg-yellow-50 text-yellow-700 border-yellow-200'}>{c.status}</Badge></TableCell>
                     <TableCell onClick={e=>e.stopPropagation()}>
                       <div className="flex gap-1">
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={e=>openEdit(c,e)}><Pencil className="w-3.5 h-3.5" /></Button>
+                        {canWrite && <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={e=>openEdit(c,e)}><Pencil className="w-3.5 h-3.5" /></Button>}
                         {isAdmin && c.status==='PENDING' && <Button size="sm" variant="outline" className="h-7 text-xs text-green-600 border-green-200 hover:bg-green-50 px-2" onClick={e=>markAsPaid(c.id,e)}><Check className="w-3 h-3" /></Button>}
                       </div>
                     </TableCell>
