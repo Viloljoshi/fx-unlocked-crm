@@ -9,10 +9,13 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Search, UserCog, Download, Trash2 } from 'lucide-react'
+import { Search, UserCog, Download, Trash2, ShieldAlert } from 'lucide-react'
 import { toast } from 'sonner'
+import { useUserRole } from '@/lib/hooks/useUserRole'
 
 export default function StaffPage() {
+  const { role, loading: roleLoading } = useUserRole()
+  const isAdmin = role === 'ADMIN'
   const [staff, setStaff] = useState([])
   const [affiliateCounts, setAffiliateCounts] = useState({})
   const [revenueTotals, setRevenueTotals] = useState({})
@@ -90,7 +93,15 @@ export default function StaffPage() {
     URL.revokeObjectURL(url)
   }
 
-  if (loading) return <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
+  if (roleLoading || loading) return <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
+
+  if (!isAdmin) return (
+    <div className="flex flex-col items-center justify-center py-24 text-center space-y-3">
+      <ShieldAlert className="w-12 h-12 text-muted-foreground opacity-40" />
+      <p className="text-lg font-semibold">Access Restricted</p>
+      <p className="text-sm text-muted-foreground">Only Admins can view Staff Management.</p>
+    </div>
+  )
 
   return (
     <div className="space-y-5">

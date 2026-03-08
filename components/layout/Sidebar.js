@@ -26,8 +26,8 @@ const adminItems = [
 ]
 
 const personalItems = [
-  // My Performance is admin-only (staff performance IS their dashboard)
-  { name: 'My Performance', href: '/dashboard/my-performance', icon: TrendingUp, adminOnly: true },
+  // My Performance: visible to all roles — each user sees only their own data
+  { name: 'My Performance', href: '/dashboard/my-performance', icon: TrendingUp },
   { name: 'AI Chat', href: '/dashboard/ai-chat', icon: MessageSquare },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]

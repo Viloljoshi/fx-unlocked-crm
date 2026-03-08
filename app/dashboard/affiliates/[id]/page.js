@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { toast } from 'sonner'
 import { ArrowLeft, Mail, Phone, Globe, MapPin, Calendar, Edit2, Save, X, ChevronDown, Plus } from 'lucide-react'
 import Link from 'next/link'
+import { useUserRole } from '@/lib/hooks/useUserRole'
 
 // Combobox for free-text + profile search
 function ManagerCombobox({ profiles, value, valueText, onChange, onChangeText }) {
@@ -91,6 +92,8 @@ const STATUS_COLORS = {
 
 export default function AffiliateDetailPage() {
   const { id } = useParams()
+  const { role } = useUserRole()
+  const canWrite = role === 'ADMIN' || role === 'STAFF'
   const [affiliate, setAffiliate] = useState(null)
   const [broker, setBroker] = useState(null)
   const [manager, setManager] = useState(null)
@@ -210,9 +213,11 @@ export default function AffiliateDetailPage() {
             </div>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-          <Edit2 className="w-4 h-4 mr-1" /> Edit
-        </Button>
+        {canWrite && (
+          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+            <Edit2 className="w-4 h-4 mr-1" /> Edit
+          </Button>
+        )}
       </div>
 
       {/* Quick Info Cards */}
@@ -378,15 +383,18 @@ export default function AffiliateDetailPage() {
             <CardContent className="space-y-3">
               <Textarea
                 value={dealNotes}
-                onChange={e => setDealNotes(e.target.value)}
-                className="text-sm min-h-[200px]"
+                onChange={e => canWrite && setDealNotes(e.target.value)}
+                readOnly={!canWrite}
+                className={`text-sm min-h-[200px] ${!canWrite ? 'opacity-70 cursor-default' : ''}`}
                 placeholder="e.g. CPA $200 per qualified lead, 30% revshare on net deposits, 90-day renewal cycle..."
               />
-              <div className="flex justify-end">
-                <Button onClick={handleDealNotesSave} disabled={saving} size="sm">
-                  <Save className="w-4 h-4 mr-1" /> Save Notes
-                </Button>
-              </div>
+              {canWrite && (
+                <div className="flex justify-end">
+                  <Button onClick={handleDealNotesSave} disabled={saving} size="sm">
+                    <Save className="w-4 h-4 mr-1" /> Save Notes
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

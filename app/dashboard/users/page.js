@@ -13,9 +13,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
-import { UserPlus, Users, Mail, Trash2, KeyRound, Eye, EyeOff } from 'lucide-react'
+import { UserPlus, Users, Mail, Trash2, KeyRound, Eye, EyeOff, ShieldAlert } from 'lucide-react'
+import { useUserRole } from '@/lib/hooks/useUserRole'
 
 export default function UsersPage() {
+  const { role, loading: roleLoading } = useUserRole()
+  const isAdmin = role === 'ADMIN'
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -146,7 +149,15 @@ export default function UsersPage() {
     return name || '(Name not set)'
   }
 
-  if (loading) return <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
+  if (roleLoading || loading) return <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
+
+  if (!isAdmin) return (
+    <div className="flex flex-col items-center justify-center py-24 text-center space-y-3">
+      <ShieldAlert className="w-12 h-12 text-muted-foreground opacity-40" />
+      <p className="text-lg font-semibold">Access Restricted</p>
+      <p className="text-sm text-muted-foreground">Only Admins can manage Users.</p>
+    </div>
+  )
 
   return (
     <div className="space-y-5">

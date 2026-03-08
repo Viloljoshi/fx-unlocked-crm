@@ -181,7 +181,7 @@ export default function RevenuePage() {
                 {filtered.length===0 ? (
                   <TableRow><TableCell colSpan={canWrite ? 8 : 7} className="text-center py-10 text-muted-foreground"><DollarSign className="w-8 h-8 mx-auto mb-2 opacity-30" />No commissions found.</TableCell></TableRow>
                 ) : filtered.map(c => (
-                  <TableRow key={c.id} className={`cursor-pointer hover:bg-muted/30 transition-colors ${selected.has(c.id)?'bg-blue-50/50':''}`} onClick={()=>openEdit(c)}>
+                  <TableRow key={c.id} className={`hover:bg-muted/30 transition-colors ${canWrite ? 'cursor-pointer' : ''} ${selected.has(c.id)?'bg-blue-50/50':''}`} onClick={()=>canWrite && openEdit(c)}>
                     {canWrite && <TableCell onClick={e=>e.stopPropagation()}><Checkbox checked={selected.has(c.id)} onCheckedChange={()=>toggleSelect(c.id)} /></TableCell>}
                     <TableCell className="font-medium">{getAffName(c.affiliate_id)}</TableCell>
                     <TableCell className="text-sm">{getBrkName(c.broker_id)}</TableCell>

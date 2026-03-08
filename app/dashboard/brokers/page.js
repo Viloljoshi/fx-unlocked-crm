@@ -147,12 +147,12 @@ export default function BrokersPage() {
                   <TableHead>Affiliates</TableHead>
                   <TableHead>Revenue</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="w-10"></TableHead>
+                  {isAdmin && <TableHead className="w-10"></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={isAdmin ? 9 : 8} className="text-center py-10 text-muted-foreground">
+                  <TableRow><TableCell colSpan={isAdmin ? 9 : 7} className="text-center py-10 text-muted-foreground">
                     <Building2 className="w-8 h-8 mx-auto mb-2 opacity-30" />No brokers found.
                   </TableCell></TableRow>
                 ) : filtered.map(b => (

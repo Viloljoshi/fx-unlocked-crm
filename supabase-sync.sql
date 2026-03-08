@@ -231,7 +231,7 @@ CREATE POLICY "notes_delete" ON affiliate_notes FOR DELETE USING (
 -- ── 13. RLS: staff_kpis ──────────────────────────────────────
 DROP POLICY IF EXISTS "staff_kpis_select" ON staff_kpis;
 CREATE POLICY "staff_kpis_select" ON staff_kpis FOR SELECT USING (
-  get_user_role() = 'ADMIN' OR staff_id = auth.uid()
+  get_user_role() = 'ADMIN' OR staff_member_id = auth.uid()
 );
 
 DROP POLICY IF EXISTS "staff_kpis_insert" ON staff_kpis;

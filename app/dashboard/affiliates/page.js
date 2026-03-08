@@ -324,14 +324,14 @@ export default function AffiliatesPage() {
                   <TableHead>Broker</TableHead>
                   <TableHead>Manager</TableHead>
                   <TableHead>Country</TableHead>
-                  <TableHead className="w-10"></TableHead>
+                  {canWrite && <TableHead className="w-10"></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={canWrite ? 9 : 8} className="text-center py-10 text-muted-foreground">
+                  <TableRow><TableCell colSpan={canWrite ? 9 : 7} className="text-center py-10 text-muted-foreground">
                     <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                    No affiliates found. Click &ldquo;Add Affiliate&rdquo; to get started.
+                    {canWrite ? 'No affiliates found. Click "Add Affiliate" to get started.' : 'No affiliates found.'}
                   </TableCell></TableRow>
                 ) : filtered.map(a => (
                   <TableRow key={a.id} className={`cursor-pointer hover:bg-muted/30 transition-colors ${selected.has(a.id) ? 'bg-blue-50/50' : ''}`} onClick={() => router.push(`/dashboard/affiliates/${a.id}`)}>

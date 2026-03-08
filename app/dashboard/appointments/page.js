@@ -208,8 +208,8 @@ export default function AppointmentsPage() {
                         const diffH=(apptDate-now)/(1000*60*60)
                         const isVU=diffH>=0&&diffH<=24; const isU=diffH>=0&&diffH<=48
                         return (
-                          <div key={a.id} className={`flex items-start gap-3 p-4 rounded-xl border transition-all cursor-pointer ${selected.has(a.id)?'bg-blue-50/50 border-blue-200':isVU?'bg-red-50/40 border-red-200':isU?'bg-orange-50/40 border-orange-200':isPast?'bg-muted/20 border-transparent opacity-70':'bg-card border-border hover:border-primary/30 hover:shadow-sm'}`}
-                            onClick={()=>openEdit(a)}>
+                          <div key={a.id} className={`flex items-start gap-3 p-4 rounded-xl border transition-all ${canWrite ? 'cursor-pointer' : ''} ${selected.has(a.id)?'bg-blue-50/50 border-blue-200':isVU?'bg-red-50/40 border-red-200':isU?'bg-orange-50/40 border-orange-200':isPast?'bg-muted/20 border-transparent opacity-70':'bg-card border-border hover:border-primary/30 hover:shadow-sm'}`}
+                            onClick={()=>canWrite && openEdit(a)}>
                             {canWrite && <div onClick={e=>e.stopPropagation()} className="pt-1"><Checkbox checked={selected.has(a.id)} onCheckedChange={()=>toggleSelect(a.id)} /></div>}
                             <div className="shrink-0 w-12 text-center">
                               <p className="text-lg font-outfit font-bold leading-none">{apptDate.getDate()}</p>
