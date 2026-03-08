@@ -215,7 +215,7 @@ CREATE POLICY "notes_select" ON affiliate_notes FOR SELECT USING (
 
 DROP POLICY IF EXISTS "notes_insert" ON affiliate_notes;
 CREATE POLICY "notes_insert" ON affiliate_notes FOR INSERT WITH CHECK (
-  auth.uid() IS NOT NULL
+  get_user_role() IN ('ADMIN', 'STAFF')
 );
 
 DROP POLICY IF EXISTS "notes_update" ON affiliate_notes;
