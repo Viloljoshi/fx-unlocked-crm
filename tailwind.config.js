@@ -56,7 +56,8 @@ module.exports = {
                 success: '#10B981',
                 warning: '#F59E0B',
                 danger: '#EF4444',
-                'fx-blue': '#3B82F6',
+                'fx-green': '#22C55E',   /* primary brand green */
+                'fx-blue': '#22C55E',    /* legacy alias → now green */
                 'fx-purple': '#8B5CF6',
                 chart: {
                     '1': 'hsl(var(--chart-1))',

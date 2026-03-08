@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
-import { Calendar, Plus, Search, Clock, CheckCircle2, XCircle, Download, ChevronRight, Trash2, Pencil } from 'lucide-react'
+import { Calendar, Plus, Search, Clock, CheckCircle2, Download, ChevronRight, Trash2, Pencil } from 'lucide-react'
 import Link from 'next/link'
 import { useUserRole } from '@/lib/hooks/useUserRole'
 
@@ -109,8 +109,17 @@ export default function AppointmentsPage() {
     e?.stopPropagation()
     const { error } = await supabase.from('appointments').update({ status }).eq('id', id)
     if (error) { toast.error(error.message); return }
-    toast.success(`Appointment ${status.toLowerCase()}`)
+    toast.success(`Appointment marked ${status.toLowerCase()}`)
     setAppointments(prev => prev.map(a => a.id===id ? {...a,status} : a))
+  }
+
+  const deleteAppointment = async (id, e) => {
+    e?.stopPropagation()
+    const { error } = await supabase.from('appointments').delete().eq('id', id)
+    if (error) { toast.error(error.message); return }
+    toast.success('Appointment deleted')
+    setAppointments(prev => prev.filter(a => a.id !== id))
+    setSelected(prev => { const n = new Set(prev); n.delete(id); return n })
   }
 
   const toggleSelect = (id) => setSelected(prev => { const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n })
@@ -221,11 +230,9 @@ export default function AppointmentsPage() {
                             <div className="flex gap-1.5 shrink-0" onClick={e=>e.stopPropagation()}>
                               <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={e=>openEdit(a,e)}><Pencil className="w-3.5 h-3.5" /></Button>
                               {a.status==='SCHEDULED'&&(
-                                <>
-                                  <Button size="sm" variant="outline" className="h-8 text-xs text-green-600 border-green-200 hover:bg-green-50" onClick={e=>markStatus(a.id,'COMPLETED',e)}><CheckCircle2 className="w-3.5 h-3.5 mr-1" />Done</Button>
-                                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-red-500" onClick={e=>markStatus(a.id,'CANCELLED',e)}><XCircle className="w-3.5 h-3.5" /></Button>
-                                </>
+                                <Button size="sm" variant="outline" className="h-8 text-xs text-green-600 border-green-200 hover:bg-green-50" onClick={e=>markStatus(a.id,'COMPLETED',e)}><CheckCircle2 className="w-3.5 h-3.5 mr-1" />Done</Button>
                               )}
+                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-red-500" title="Delete appointment" onClick={e=>deleteAppointment(a.id,e)}><Trash2 className="w-3.5 h-3.5" /></Button>
                             </div>
                           </div>
                         )

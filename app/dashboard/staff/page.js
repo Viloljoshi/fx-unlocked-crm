@@ -8,7 +8,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Search, UserCog, Download } from 'lucide-react'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { Search, UserCog, Download, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 export default function StaffPage() {
   const [staff, setStaff] = useState([])
@@ -18,6 +20,8 @@ export default function StaffPage() {
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
@@ -48,6 +52,28 @@ export default function StaffPage() {
     if (statusFilter === 'inactive' && s.is_active) return false
     return true
   })
+
+  const deleteUser = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      const res = await fetch('/api/users/delete', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: deleteTarget.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Delete failed')
+      const name = [deleteTarget.first_name, deleteTarget.last_name].filter(Boolean).join(' ') || deleteTarget.email || 'Staff member'
+      toast.success(`${name} removed`)
+      setStaff(prev => prev.filter(s => s.id !== deleteTarget.id))
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setDeleting(false)
+      setDeleteTarget(null)
+    }
+  }
 
   const exportCSV = () => {
     const headers = ['Name', 'Role', 'Status', 'Affiliates', 'Revenue', 'Start Date']
@@ -113,11 +139,12 @@ export default function StaffPage() {
                   <TableHead>Affiliates</TableHead>
                   <TableHead>Revenue Generated</TableHead>
                   <TableHead>Start Date</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                  <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                     <UserCog className="w-8 h-8 mx-auto mb-2 opacity-30" />
                     No staff members found.
                   </TableCell></TableRow>
@@ -133,6 +160,12 @@ export default function StaffPage() {
                     <TableCell className="font-medium">{affiliateCounts[s.id] || 0}</TableCell>
                     <TableCell className="font-medium text-green-600">${(revenueTotals[s.id] || 0).toLocaleString()}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{s.start_date ? new Date(s.start_date).toLocaleDateString() : '-'}</TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+                        onClick={() => setDeleteTarget(s)}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -140,6 +173,25 @@ export default function StaffPage() {
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete &ldquo;{[deleteTarget?.first_name, deleteTarget?.last_name].filter(Boolean).join(' ') || 'this staff member'}&rdquo;?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove their account, login access, and unassign their affiliates.
+              <br /><strong className="text-destructive">This cannot be undone.</strong>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteUser} disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {deleting ? 'Deleting...' : 'Delete Staff Member'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

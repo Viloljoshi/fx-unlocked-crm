@@ -139,13 +139,13 @@ export default function ResetPasswordPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/8 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-green-500/10 rounded-full blur-3xl" />
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500/8 rounded-full blur-3xl" />
       </div>
 
       <Card className="w-full max-w-md relative shadow-lg">
         <CardHeader className="text-center space-y-4 pb-2">
-          <div className="mx-auto w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-md">
+          <div className="mx-auto w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-purple-600 flex items-center justify-center shadow-md">
             {checking ? (
               <Loader2 className="w-6 h-6 text-white animate-spin" />
             ) : success ? (

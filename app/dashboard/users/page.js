@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
-import { UserPlus, Users, Mail } from 'lucide-react'
+import { UserPlus, Users, Mail, Trash2, KeyRound } from 'lucide-react'
 
 export default function UsersPage() {
   const [users, setUsers] = useState([])
@@ -24,6 +25,8 @@ export default function UsersPage() {
   const [inviteLastName, setInviteLastName] = useState('')
   const [inviting, setInviting] = useState(false)
   const [inviteSent, setInviteSent] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
@@ -95,6 +98,41 @@ export default function UsersPage() {
     if (error) { toast.error(error.message); return }
     toast.success(isActive ? 'User deactivated' : 'User activated')
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_active: !isActive } : u))
+  }
+
+  const deleteUser = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      const res = await fetch('/api/users/delete', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: deleteTarget.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Delete failed')
+      toast.success(`${getDisplayName(deleteTarget)} removed`)
+      setUsers(prev => prev.filter(u => u.id !== deleteTarget.id))
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setDeleting(false)
+      setDeleteTarget(null)
+    }
+  }
+
+  const sendPasswordReset = async (email) => {
+    if (!email) { toast.error('No email address for this user'); return }
+    try {
+      const supabaseClient = createClient()
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+      if (error) throw error
+      toast.success(`Password reset email sent to ${email}`)
+    } catch (err) {
+      toast.error(err.message || 'Failed to send reset email')
+    }
   }
 
   const getDisplayName = (u) => {
@@ -171,10 +209,22 @@ export default function UsersPage() {
                       {u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="sm" className="h-7 text-xs"
-                        onClick={() => toggleActive(u.id, u.is_active !== false)}>
-                        {u.is_active !== false ? 'Deactivate' : 'Activate'}
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="sm" className="h-7 text-xs"
+                          onClick={() => toggleActive(u.id, u.is_active !== false)}>
+                          {u.is_active !== false ? 'Deactivate' : 'Activate'}
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                          title="Send password reset email"
+                          onClick={() => sendPasswordReset(u.email)}>
+                          <KeyRound className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+                          title="Delete user"
+                          onClick={() => setDeleteTarget(u)}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -183,6 +233,26 @@ export default function UsersPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Delete Confirm */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete &ldquo;{getDisplayName(deleteTarget)}&rdquo;?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove their account and login access. Their affiliates will be unassigned.
+              <br /><strong className="text-destructive">This cannot be undone.</strong>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteUser} disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {deleting ? 'Deleting...' : 'Delete User'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Invite User Modal */}
       <Dialog open={inviteOpen} onOpenChange={(open) => { if (!open) resetInviteForm(); else setInviteOpen(true) }}>
