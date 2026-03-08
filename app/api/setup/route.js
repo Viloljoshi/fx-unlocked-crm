@@ -230,15 +230,28 @@ CREATE POLICY "affiliates_insert" ON affiliates FOR INSERT WITH CHECK (auth.uid(
 CREATE POLICY "affiliates_update" ON affiliates FOR UPDATE USING (manager_id = auth.uid() OR get_user_role() = 'ADMIN');
 CREATE POLICY "affiliates_delete" ON affiliates FOR DELETE USING (get_user_role() = 'ADMIN');
 
-CREATE POLICY "commissions_select" ON commissions FOR SELECT USING (staff_member_id = auth.uid() OR get_user_role() = 'ADMIN');
+-- Staff can see commissions where they're the staff_member OR for affiliates they manage
+CREATE POLICY "commissions_select" ON commissions FOR SELECT USING (
+  get_user_role() = 'ADMIN' OR
+  staff_member_id = auth.uid() OR
+  affiliate_id IN (SELECT id FROM affiliates WHERE manager_id = auth.uid())
+);
 CREATE POLICY "commissions_insert" ON commissions FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
-CREATE POLICY "commissions_update" ON commissions FOR UPDATE USING (get_user_role() = 'ADMIN');
+CREATE POLICY "commissions_update" ON commissions FOR UPDATE USING (get_user_role() = 'ADMIN' OR staff_member_id = auth.uid());
 CREATE POLICY "commissions_delete" ON commissions FOR DELETE USING (get_user_role() = 'ADMIN');
 
-CREATE POLICY "notes_select" ON affiliate_notes FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "notes_select" ON affiliate_notes FOR SELECT USING (
+  get_user_role() = 'ADMIN' OR
+  user_id = auth.uid() OR
+  affiliate_id IN (SELECT id FROM affiliates WHERE manager_id = auth.uid())
+);
 CREATE POLICY "notes_insert" ON affiliate_notes FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
-CREATE POLICY "appointments_select" ON appointments FOR SELECT USING (auth.uid() IS NOT NULL);
+-- Staff can see appointments for their affiliates only
+CREATE POLICY "appointments_select" ON appointments FOR SELECT USING (
+  get_user_role() = 'ADMIN' OR
+  affiliate_id IN (SELECT id FROM affiliates WHERE manager_id = auth.uid())
+);
 CREATE POLICY "appointments_insert" ON appointments FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 CREATE POLICY "appointments_update" ON appointments FOR UPDATE USING (user_id = auth.uid() OR get_user_role() = 'ADMIN');
 
