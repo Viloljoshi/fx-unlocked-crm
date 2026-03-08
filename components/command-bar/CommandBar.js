@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Search, Plus, Users, Building2, DollarSign, Calendar, ArrowRight, Check, Loader2, Shield } from 'lucide-react'
+import { Search, Plus, Users, Building2, DollarSign, Calendar, ArrowRight, Check, Loader2, Shield, StickyNote } from 'lucide-react'
 
 const ENTITY_CONFIGS = {
   broker: {
@@ -60,6 +60,16 @@ const ENTITY_CONFIGS = {
       { key: 'appointment_type', label: 'Type', type: 'select', options: ['MEETING', 'CALL', 'FOLLOW_UP'], required: true },
       { key: 'scheduled_at', label: 'Date & Time (YYYY-MM-DD HH:MM)', type: 'text', required: true },
       { key: 'notes', label: 'Notes', type: 'text' },
+    ],
+  },
+  note: {
+    icon: StickyNote,
+    label: 'Note',
+    table: 'affiliate_notes',
+    fields: [
+      { key: 'affiliate_id', label: 'Affiliate', type: 'search', searchTable: 'affiliates', searchField: 'name', required: true },
+      { key: 'note_type', label: 'Type', type: 'select', options: ['GENERAL', 'CALL', 'MEETING', 'EMAIL'], required: true },
+      { key: 'content', label: 'Note Content', type: 'text', required: true },
     ],
   },
 }
@@ -266,6 +276,9 @@ export default function CommandBar({ open, setOpen, userId }) {
       }
       if (entityType === 'appointment') {
         insertData.scheduled_at = new Date(insertData.scheduled_at).toISOString()
+        insertData.user_id = userId
+      }
+      if (entityType === 'note') {
         insertData.user_id = userId
       }
 

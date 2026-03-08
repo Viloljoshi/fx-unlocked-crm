@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   first_name TEXT,
   last_name TEXT,
+  email TEXT,
   role TEXT DEFAULT 'STAFF' CHECK (role IN ('ADMIN', 'STAFF', 'VIEWER')),
   is_active BOOLEAN DEFAULT true,
   start_date DATE,
