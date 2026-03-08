@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient, getAuthUser } from '@/lib/supabase/server'
 
 export async function POST(request) {
   try {
+    // Auth guard — admin only
+    const { user, role: callerRole } = await getAuthUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (callerRole !== 'ADMIN') return NextResponse.json({ error: 'Forbidden — only admins can invite users' }, { status: 403 })
+
     const { email, role = 'STAFF', firstName = '', lastName = '' } = await request.json()
     if (!email) return NextResponse.json({ error: 'Email is required' }, { status: 400 })
 

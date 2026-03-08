@@ -16,6 +16,7 @@ import { Search, Plus, Users, Download, ChevronDown, X, Trash2, Pencil } from 'l
 import { useRouter } from 'next/navigation'
 import { Checkbox } from '@/components/ui/checkbox'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { useUserRole } from '@/lib/hooks/useUserRole'
 
 const STATUS_COLORS = {
   ACTIVE: 'bg-green-50 text-green-700 border-green-200',
@@ -148,13 +149,22 @@ export default function AffiliatesPage() {
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const router = useRouter()
   const supabase = createClient()
+  const { userId, role, loading: roleLoading } = useUserRole()
+  const isAdmin = role === 'ADMIN'
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    if (roleLoading || !userId || !role) return
+    load()
+  }, [roleLoading, userId, role])
 
   const load = async () => {
     setLoading(true)
+    // Staff see only their own affiliates; admin sees all
+    let affQuery = supabase.from('affiliates').select('*').order('created_at', { ascending: false })
+    if (role && role !== 'ADMIN') affQuery = affQuery.eq('manager_id', userId)
+
     const [affRes, brkRes, profRes] = await Promise.all([
-      supabase.from('affiliates').select('*').order('created_at', { ascending: false }),
+      affQuery,
       supabase.from('brokers').select('id, name'),
       supabase.from('profiles').select('id, first_name, last_name, role'),
     ])

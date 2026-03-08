@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
 import { DollarSign, Plus, Download, Trash2, Pencil, Check } from 'lucide-react'
+import { useUserRole } from '@/lib/hooks/useUserRole'
 
 const MONTHS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const EMPTY_FORM = { affiliate_id: '', broker_id: 'none', month: new Date().getMonth()+1, year: new Date().getFullYear(), deal_type: 'CPA', revenue_amount: '', notes: '', status: 'PENDING' }
@@ -28,39 +29,49 @@ export default function RevenuePage() {
   const [monthFilter, setMonthFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [affiliateFilter, setAffiliateFilter] = useState('all')
-  const [profile, setProfile] = useState(null)
   const [addOpen, setAddOpen] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [form, setForm] = useState({ affiliate_id: '', broker_id: 'none', month: new Date().getMonth()+1, year: new Date().getFullYear(), deal_type: 'CPA', revenue_amount: '', notes: '' })
   const [saving, setSaving] = useState(false)
   const [selected, setSelected] = useState(new Set())
   const [deleteConfirm, setDeleteConfirm] = useState(false)
-  const [userId, setUserId] = useState(null)
   const supabase = createClient()
+  const { userId, role, loading: roleLoading } = useUserRole()
+  const isAdmin = role === 'ADMIN'
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    if (roleLoading || !userId || !role) return
+    load()
+  }, [roleLoading, userId, role])
 
   const load = async () => {
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      setUserId(user.id)
-      const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).single(); setProfile(prof)
-    }
-    const [commRes, affRes, brkRes] = await Promise.all([
-      supabase.from('commissions').select('*').order('year',{ascending:false}).order('month',{ascending:false}),
-      supabase.from('affiliates').select('id, name'),
+    // Staff: only see commissions for their affiliates; admin sees all
+    let affQuery = supabase.from('affiliates').select('id, name')
+    if (role !== 'ADMIN') affQuery = affQuery.eq('manager_id', userId)
+
+    const [affRes, brkRes] = await Promise.all([
+      affQuery,
       supabase.from('brokers').select('id, name'),
     ])
-    setCommissions(commRes.data || [])
-    setAffiliates(affRes.data || [])
+
+    const myAffiliates = affRes.data || []
+    const myAffiliateIds = myAffiliates.map(a => a.id)
+
+    let commQuery = supabase.from('commissions').select('*').order('year',{ascending:false}).order('month',{ascending:false})
+    if (role !== 'ADMIN' && myAffiliateIds.length > 0) commQuery = commQuery.in('affiliate_id', myAffiliateIds)
+    else if (role !== 'ADMIN') commQuery = commQuery.eq('affiliate_id', 'none')
+
+    const { data: commData } = await commQuery
+
+    setCommissions(commData || [])
+    setAffiliates(myAffiliates)
     setBrokers(brkRes.data || [])
     setLoading(false)
   }
 
   const getAffName = (id) => affiliates.find(a=>a.id===id)?.name || '-'
   const getBrkName = (id) => brokers.find(b=>b.id===id)?.name || '-'
-  const isAdmin = profile?.role === 'ADMIN'
 
   const filtered = commissions.filter(c => {
     if (yearFilter !== 'all' && c.year !== parseInt(yearFilter)) return false

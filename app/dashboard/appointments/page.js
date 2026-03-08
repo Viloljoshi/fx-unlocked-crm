@@ -15,6 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from 'sonner'
 import { Calendar, Plus, Search, Clock, CheckCircle2, XCircle, Download, ChevronRight, Trash2, Pencil } from 'lucide-react'
 import Link from 'next/link'
+import { useUserRole } from '@/lib/hooks/useUserRole'
 
 const TYPE_COLORS = { MEETING:'bg-blue-50 text-blue-700 border-blue-200', CALL:'bg-green-50 text-green-700 border-green-200', FOLLOW_UP:'bg-purple-50 text-purple-700 border-purple-200' }
 const STATUS_COLORS = { SCHEDULED:'bg-yellow-50 text-yellow-700 border-yellow-200', COMPLETED:'bg-green-50 text-green-700 border-green-200', CANCELLED:'bg-red-50 text-red-700 border-red-200' }
@@ -33,21 +34,32 @@ export default function AppointmentsPage() {
   const [saving, setSaving] = useState(false)
   const [selected, setSelected] = useState(new Set())
   const [deleteConfirm, setDeleteConfirm] = useState(false)
-  const [userId, setUserId] = useState(null)
   const supabase = createClient()
+  const { userId, role, loading: roleLoading } = useUserRole()
+  const isAdmin = role === 'ADMIN'
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    if (roleLoading || !userId || !role) return
+    load()
+  }, [roleLoading, userId, role])
 
   const load = async () => {
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) setUserId(user.id)
-    const [apptRes, affRes] = await Promise.all([
-      supabase.from('appointments').select('*').order('scheduled_at', { ascending: true }),
-      supabase.from('affiliates').select('id, name'),
-    ])
-    setAppointments(apptRes.data || [])
-    setAffiliates(affRes.data || [])
+    // Staff: only see appointments for their affiliates
+    let affQuery = supabase.from('affiliates').select('id, name')
+    if (role !== 'ADMIN') affQuery = affQuery.eq('manager_id', userId)
+
+    const { data: myAffiliates } = await affQuery
+    const myAffiliateIds = (myAffiliates || []).map(a => a.id)
+
+    let apptQuery = supabase.from('appointments').select('*').order('scheduled_at', { ascending: true })
+    if (role !== 'ADMIN' && myAffiliateIds.length > 0) apptQuery = apptQuery.in('affiliate_id', myAffiliateIds)
+    else if (role !== 'ADMIN') apptQuery = apptQuery.eq('affiliate_id', 'none')
+
+    const { data: apptData } = await apptQuery
+
+    setAppointments(apptData || [])
+    setAffiliates(myAffiliates || [])
     setLoading(false)
   }
 

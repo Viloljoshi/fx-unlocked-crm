@@ -16,6 +16,7 @@ import { Users, Building2, DollarSign, Clock, TrendingUp, AlertTriangle, ArrowUp
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import Link from 'next/link'
 import { toast } from 'sonner'
+import { useUserRole } from '@/lib/hooks/useUserRole'
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -65,7 +66,8 @@ export default function DashboardPage() {
   const [renewalAlerts, setRenewalAlerts] = useState([])
   const [upcomingAppointments, setUpcomingAppointments] = useState([])
   const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString())
-  const [userId, setUserId] = useState(null)
+  const { userId, role, loading: roleLoading } = useUserRole()
+  const isAdmin = role === 'ADMIN'
   const [dashboards, saveDashboards] = useDashboards(userId)
   const [activeDashboardId, setActiveDashboardId] = useState('main')
   const [modalOpen, setModalOpen] = useState(false)
@@ -76,25 +78,42 @@ export default function DashboardPage() {
   const supabase = createClient()
 
   useEffect(() => {
+    // Wait until we know who the user is and their role
+    if (roleLoading || !userId || !role) return
+
     const load = async () => {
       setLoading(true)
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) setUserId(user.id)
+        // Admin sees everything; staff sees only their own affiliates
+        let affQuery = supabase.from('affiliates').select('id, name, status, renewal_date, broker_id, manager_id')
+        if (!isAdmin) affQuery = affQuery.eq('manager_id', userId)
 
-        const [affRes, brokerRes, commRes, apptRes] = await Promise.all([
-          supabase.from('affiliates').select('id, name, status, renewal_date, broker_id'),
+        const [affRes, brokerRes] = await Promise.all([
+          affQuery,
           supabase.from('brokers').select('id, name, is_active'),
-          supabase.from('commissions').select('id, month, year, revenue_amount, status, affiliate_id'),
-          supabase.from('appointments').select('id, title, affiliate_id, scheduled_at, appointment_type, status')
-            .gte('scheduled_at', new Date().toISOString())
-            .eq('status', 'SCHEDULED')
-            .order('scheduled_at', { ascending: true })
-            .limit(5),
         ])
 
         const affiliates = affRes.data || []
         const brokers = brokerRes.data || []
+        const affiliateIds = affiliates.map(a => a.id)
+
+        // Fetch commissions scoped to relevant affiliates
+        let commQuery = supabase.from('commissions').select('id, month, year, revenue_amount, status, affiliate_id')
+        if (!isAdmin && affiliateIds.length > 0) commQuery = commQuery.in('affiliate_id', affiliateIds)
+        else if (!isAdmin) commQuery = commQuery.eq('affiliate_id', 'none') // No affiliates = no commissions
+
+        // Fetch upcoming appointments scoped to relevant affiliates
+        let apptQuery = supabase.from('appointments')
+          .select('id, title, affiliate_id, scheduled_at, appointment_type, status')
+          .gte('scheduled_at', new Date().toISOString())
+          .eq('status', 'SCHEDULED')
+          .order('scheduled_at', { ascending: true })
+          .limit(5)
+        if (!isAdmin && affiliateIds.length > 0) apptQuery = apptQuery.in('affiliate_id', affiliateIds)
+        else if (!isAdmin) apptQuery = apptQuery.eq('affiliate_id', 'none')
+
+        const [commRes, apptRes] = await Promise.all([commQuery, apptQuery])
+
         const commissions = commRes.data || []
         const appointments = apptRes.data || []
 
@@ -158,7 +177,7 @@ export default function DashboardPage() {
       }
     }
     load()
-  }, [yearFilter])
+  }, [yearFilter, roleLoading, userId, role])
 
   const fmt = (n) => `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 
@@ -199,14 +218,22 @@ export default function DashboardPage() {
     toast.success('Dashboard deleted')
   }
 
-  const statCards = [
-    { label: 'Total Affiliates', value: stats.totalAffiliates, sub: `${stats.activeAffiliates} active`, icon: Users, iconColor: 'text-blue-500', bgColor: 'bg-blue-50' },
-    { label: 'Total Brokers', value: stats.totalBrokers, sub: `${stats.activeBrokers} active`, icon: Building2, iconColor: 'text-purple-500', bgColor: 'bg-purple-50' },
-    { label: 'Total Revenue', value: fmt(stats.totalRevenue), sub: 'All time', icon: DollarSign, iconColor: 'text-green-500', bgColor: 'bg-green-50' },
-    { label: 'Pending Revenue', value: fmt(stats.pendingRevenue), sub: 'Pending & Awaited', icon: Clock, iconColor: 'text-yellow-500', bgColor: 'bg-yellow-50' },
-    { label: 'Paid Revenue', value: fmt(stats.paidRevenue), sub: 'Confirmed', icon: TrendingUp, iconColor: 'text-green-500', bgColor: 'bg-green-50' },
-    { label: 'Renewal Alerts', value: renewalAlerts.length, sub: 'Next 30 days', icon: AlertTriangle, iconColor: 'text-orange-500', bgColor: 'bg-orange-50' },
-  ]
+  const statCards = isAdmin
+    ? [
+        { label: 'Total Affiliates', value: stats.totalAffiliates, sub: `${stats.activeAffiliates ?? 0} active`, icon: Users, iconColor: 'text-blue-500', bgColor: 'bg-blue-50' },
+        { label: 'Total Brokers', value: stats.totalBrokers, sub: `${stats.activeBrokers ?? 0} active`, icon: Building2, iconColor: 'text-purple-500', bgColor: 'bg-purple-50' },
+        { label: 'Total Revenue', value: fmt(stats.totalRevenue), sub: 'All time', icon: DollarSign, iconColor: 'text-green-500', bgColor: 'bg-green-50' },
+        { label: 'Pending Revenue', value: fmt(stats.pendingRevenue), sub: 'Pending & Awaited', icon: Clock, iconColor: 'text-yellow-500', bgColor: 'bg-yellow-50' },
+        { label: 'Paid Revenue', value: fmt(stats.paidRevenue), sub: 'Confirmed', icon: TrendingUp, iconColor: 'text-green-500', bgColor: 'bg-green-50' },
+        { label: 'Renewal Alerts', value: renewalAlerts.length, sub: 'Next 30 days', icon: AlertTriangle, iconColor: 'text-orange-500', bgColor: 'bg-orange-50' },
+      ]
+    : [
+        { label: 'My Affiliates', value: stats.totalAffiliates, sub: `${stats.activeAffiliates ?? 0} active`, icon: Users, iconColor: 'text-blue-500', bgColor: 'bg-blue-50' },
+        { label: 'My Revenue', value: fmt(stats.totalRevenue), sub: 'All time', icon: DollarSign, iconColor: 'text-green-500', bgColor: 'bg-green-50' },
+        { label: 'Pending Revenue', value: fmt(stats.pendingRevenue), sub: 'Pending & Awaited', icon: Clock, iconColor: 'text-yellow-500', bgColor: 'bg-yellow-50' },
+        { label: 'Paid Revenue', value: fmt(stats.paidRevenue), sub: 'Confirmed', icon: TrendingUp, iconColor: 'text-green-500', bgColor: 'bg-green-50' },
+        { label: 'My Renewals', value: renewalAlerts.length, sub: 'Next 30 days', icon: AlertTriangle, iconColor: 'text-orange-500', bgColor: 'bg-orange-50' },
+      ]
 
   if (loading) {
     return (
@@ -225,15 +252,19 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-outfit font-bold">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Overview of your affiliate business</p>
+          <p className="text-sm text-muted-foreground">
+            {isAdmin ? 'Overview of your affiliate business' : 'Your performance overview'}
+          </p>
         </div>
-        <Button size="sm" onClick={openCreate} className="shrink-0">
-          <Plus className="w-4 h-4 mr-1" /> New Dashboard
-        </Button>
+        {isAdmin && (
+          <Button size="sm" onClick={openCreate} className="shrink-0">
+            <Plus className="w-4 h-4 mr-1" /> New Dashboard
+          </Button>
+        )}
       </div>
 
-      {/* Dashboard Tabs */}
-      {dashboards.length > 1 && (
+      {/* Dashboard Tabs — admin only */}
+      {isAdmin && dashboards.length > 1 && (
         <div className="flex items-center gap-1 overflow-x-auto pb-1">
           {dashboards.map(d => (
             <div key={d.id} className={`flex items-center gap-1 rounded-lg border transition-colors shrink-0 ${activeDashboardId === d.id ? 'bg-primary text-primary-foreground border-primary' : 'bg-card hover:bg-muted border-border'}`}>
@@ -261,7 +292,7 @@ export default function DashboardPage() {
 
       {/* Overview Stats */}
       {show('overview_stats') && (
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className={`grid gap-4 ${isAdmin ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-6' : 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-5'}`}>
           {statCards.map((card, i) => (
             <Card key={i} className="hover:shadow-md transition-shadow">
               <CardContent className="pt-4 pb-4 px-4">

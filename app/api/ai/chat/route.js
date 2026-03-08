@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient, getAuthUser } from '@/lib/supabase/server'
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -56,6 +56,10 @@ async function fetchContext(message) {
 
 export async function POST(request) {
   try {
+    // Auth guard — must be logged in
+    const { user } = await getAuthUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
     const { message, history = [] } = await request.json()
     if (!message) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 })

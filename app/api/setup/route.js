@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient, getAuthUser } from '@/lib/supabase/server'
 
 const MIGRATION_SQL = `
 -- FX Unlocked CRM Database Schema
@@ -255,6 +255,11 @@ CREATE POLICY "audit_logs_insert" ON audit_logs FOR INSERT WITH CHECK (auth.uid(
 `;
 
 export async function GET() {
+  // Auth guard — admin only
+  const { user, role } = await getAuthUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const supabase = createAdminClient()
   const tables = ['profiles', 'brokers', 'affiliates', 'commissions', 'affiliate_notes', 'appointments', 'staff_kpis', 'company_kpis', 'audit_logs']
   const status = {}

@@ -26,7 +26,8 @@ const adminItems = [
 ]
 
 const personalItems = [
-  { name: 'My Performance', href: '/dashboard/my-performance', icon: TrendingUp },
+  // My Performance is admin-only (staff performance IS their dashboard)
+  { name: 'My Performance', href: '/dashboard/my-performance', icon: TrendingUp, adminOnly: true },
   { name: 'AI Chat', href: '/dashboard/ai-chat', icon: MessageSquare },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]
@@ -103,7 +104,7 @@ export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobile
         )}
 
         {!collapsed && <p className="text-xs font-medium text-muted-foreground px-3 pt-4 pb-1 uppercase tracking-wider">Personal</p>}
-        {personalItems.map(item => <NavLink key={item.href} item={item} />)}
+        {personalItems.filter(item => !item.adminOnly || isAdmin).map(item => <NavLink key={item.href} item={item} />)}
       </nav>
     </div>
   )

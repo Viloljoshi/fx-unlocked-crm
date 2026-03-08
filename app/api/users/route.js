@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient, getAuthUser } from '@/lib/supabase/server'
 
 // GET - list all users with emails from auth.users merged with profiles
 export async function GET() {
   try {
+    // Auth guard — admin only
+    const { user, role } = await getAuthUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
     const supabase = createAdminClient()
 
     // Get all profiles
