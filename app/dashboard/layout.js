@@ -29,14 +29,16 @@ export default function DashboardLayout({ children }) {
         .single()
 
       if (error && error.code === 'PGRST116') {
-        // Profile doesn't exist, create it
+        // Profile doesn't exist, create it with all required fields from user metadata
         const { data: newProfile } = await supabase
           .from('profiles')
           .insert({
             id: authUser.id,
+            email: authUser.email || '',
             first_name: authUser.user_metadata?.first_name || '',
             last_name: authUser.user_metadata?.last_name || '',
-            role: 'STAFF',
+            role: authUser.user_metadata?.role || 'STAFF',
+            is_active: true,
           })
           .select()
           .single()
@@ -46,7 +48,7 @@ export default function DashboardLayout({ children }) {
       }
     }
     loadProfile()
-  }, [supabase])
+  }, [])
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">

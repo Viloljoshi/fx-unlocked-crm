@@ -27,14 +27,22 @@ export default function MyPerformancePage() {
       setLoading(true)
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setLoading(false); return }
+
       const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
       setProfile(prof)
-      const [affRes, commRes, kpiRes] = await Promise.all([
-        supabase.from('affiliates').select('*').eq('manager_id', user.id),
-        supabase.from('commissions').select('*'),
+
+      // Fetch affiliates first so we can filter commissions to this user's portfolio
+      const { data: myAffiliates } = await supabase.from('affiliates').select('*').eq('manager_id', user.id)
+      setAffiliates(myAffiliates || [])
+
+      const myAffiliateIds = (myAffiliates || []).map(a => a.id)
+
+      const [commRes, kpiRes] = await Promise.all([
+        myAffiliateIds.length > 0
+          ? supabase.from('commissions').select('*').in('affiliate_id', myAffiliateIds)
+          : Promise.resolve({ data: [] }),
         supabase.from('staff_kpis').select('*').eq('staff_member_id', user.id).order('year', { ascending: false }),
       ])
-      setAffiliates(affRes.data || [])
       setCommissions(commRes.data || [])
       setKpis(kpiRes.data || [])
       setLoading(false)
