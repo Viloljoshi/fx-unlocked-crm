@@ -219,7 +219,7 @@ export default function LoginPage() {
         )}
       </div>
 
-      <p className="mt-6 text-xs text-gray-400">© 2025 FX Unlocked. All rights reserved.</p>
+      <p className="mt-6 text-xs text-gray-400">© 2026 FX Unlocked. All rights reserved.</p>
     </div>
   )
 }
