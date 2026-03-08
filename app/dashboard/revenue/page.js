@@ -152,9 +152,9 @@ export default function RevenuePage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {selected.size > 0 && <Button variant="destructive" size="sm" onClick={()=>setDeleteConfirm(true)}><Trash2 className="w-4 h-4 mr-1" /> Delete {selected.size}</Button>}
+          {isAdmin && selected.size > 0 && <Button variant="destructive" size="sm" onClick={()=>setDeleteConfirm(true)}><Trash2 className="w-4 h-4 mr-1" /> Delete {selected.size}</Button>}
           <Button variant="outline" size="sm" onClick={exportCSV}><Download className="w-4 h-4 mr-1" /> Export CSV</Button>
-          {isAdmin && <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-1" /> Add Commission</Button>}
+          <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-1" /> Add Commission</Button>
         </div>
       </div>
 
@@ -171,17 +171,17 @@ export default function RevenuePage() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50">
-                  <TableHead className="w-10"><Checkbox checked={selected.size===filtered.length&&filtered.length>0} onCheckedChange={toggleAll} /></TableHead>
+                  {isAdmin && <TableHead className="w-10"><Checkbox checked={selected.size===filtered.length&&filtered.length>0} onCheckedChange={toggleAll} /></TableHead>}
                   <TableHead>Affiliate</TableHead><TableHead>Broker</TableHead><TableHead>Period</TableHead><TableHead>Deal Type</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead>
                   <TableHead className="w-20">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length===0 ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground"><DollarSign className="w-8 h-8 mx-auto mb-2 opacity-30" />No commissions found.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={isAdmin ? 8 : 7} className="text-center py-10 text-muted-foreground"><DollarSign className="w-8 h-8 mx-auto mb-2 opacity-30" />No commissions found.</TableCell></TableRow>
                 ) : filtered.map(c => (
                   <TableRow key={c.id} className={`cursor-pointer hover:bg-muted/30 transition-colors ${selected.has(c.id)?'bg-blue-50/50':''}`} onClick={()=>openEdit(c)}>
-                    <TableCell onClick={e=>e.stopPropagation()}><Checkbox checked={selected.has(c.id)} onCheckedChange={()=>toggleSelect(c.id)} /></TableCell>
+                    {isAdmin && <TableCell onClick={e=>e.stopPropagation()}><Checkbox checked={selected.has(c.id)} onCheckedChange={()=>toggleSelect(c.id)} /></TableCell>}
                     <TableCell className="font-medium">{getAffName(c.affiliate_id)}</TableCell>
                     <TableCell className="text-sm">{getBrkName(c.broker_id)}</TableCell>
                     <TableCell className="text-sm">{MONTHS[c.month]} {c.year}</TableCell>
