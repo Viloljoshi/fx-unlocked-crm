@@ -17,6 +17,8 @@ import { useRouter } from 'next/navigation'
 import { Checkbox } from '@/components/ui/checkbox'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { useUserRole } from '@/lib/hooks/useUserRole'
+import DealTypeFields from '@/components/deal-type-fields/DealTypeFields'
+import AffiliateCombobox from '@/components/affiliate-combobox/AffiliateCombobox'
 
 const STATUS_COLORS = {
   ACTIVE: 'bg-green-50 text-green-700 border-green-200',
@@ -27,9 +29,11 @@ const STATUS_COLORS = {
 
 const EMPTY_FORM = {
   name: '', email: '', phone: '', status: 'LEAD',
-  deal_type: 'CPA', broker_id: 'none', manager_id: 'none',
+  deal_type: '', broker_id: 'none', manager_id: 'none',
+  master_ib_id: 'none',
   manager_name_free: '', // free-text AM name when not in profiles
-  country: '', website: '', deal_terms: '', notes: ''
+  country: '', website: '', deal_terms: '', notes: '',
+  deal_data: {}, // deal-type-specific fields stored in deal_details.deal JSONB
 }
 
 // Combobox: shows profiles as dropdown suggestions + allows free-text
@@ -176,6 +180,7 @@ export default function AffiliatesPage() {
   }
 
   const getBrokerName = (id) => brokers.find(b => b.id === id)?.name || '-'
+  const getMasterIBName = (id) => affiliates.find(a => a.id === id)?.name || '-'
 
   // Display manager: prefer linked profile, fallback to deal_details.account_manager_name
   const getManagerName = (aff) => {
@@ -189,7 +194,8 @@ export default function AffiliatesPage() {
   const filtered = affiliates.filter(a => {
     if (search && !a.name?.toLowerCase().includes(search.toLowerCase()) && !a.email?.toLowerCase().includes(search.toLowerCase())) return false
     if (statusFilter !== 'all' && a.status !== statusFilter) return false
-    if (dealTypeFilter !== 'all' && a.deal_type !== dealTypeFilter) return false
+    if (dealTypeFilter === 'NONE' && a.deal_type) return false
+    if (dealTypeFilter !== 'all' && dealTypeFilter !== 'NONE' && a.deal_type !== dealTypeFilter) return false
     if (brokerFilter !== 'all' && a.broker_id !== brokerFilter) return false
     return true
   })
@@ -200,11 +206,13 @@ export default function AffiliatesPage() {
     setEditTarget(a)
     setForm({
       name: a.name, email: a.email, phone: a.phone || '',
-      status: a.status, deal_type: a.deal_type,
+      status: a.status, deal_type: a.deal_type || '',
       broker_id: a.broker_id || 'none', manager_id: a.manager_id || 'none',
+      master_ib_id: a.master_ib_id || 'none',
       manager_name_free: a.deal_details?.account_manager_name || '',
       country: a.country || '', website: a.website || '',
       deal_terms: a.deal_terms || '', notes: a.notes || '',
+      deal_data: a.deal_details?.deal || {},
     })
     setAddOpen(true)
   }
@@ -213,14 +221,40 @@ export default function AffiliatesPage() {
     if (!form.name || !form.email) { toast.error('Name and email are required'); return }
     setSaving(true)
     const payload = { ...form }
-    // Handle manager
-    if (!payload.broker_id || payload.broker_id === 'none') delete payload.broker_id
-    if (!payload.manager_id || payload.manager_id === 'none') delete payload.manager_id
-    // Store free-text AM name in deal_details JSONB
+
+    // Handle FK references: convert 'none' → null
+    if (!payload.broker_id || payload.broker_id === 'none') { payload.broker_id = null }
+    if (!payload.manager_id || payload.manager_id === 'none') { payload.manager_id = null }
+    if (!payload.master_ib_id || payload.master_ib_id === 'none') { payload.master_ib_id = null }
+
+    // Handle empty deal_type → null for DB
+    if (!payload.deal_type) payload.deal_type = null
+
+    // Build deal_details JSONB: merge AM name, deal notes, and deal-type-specific data
+    const existingDetails = editTarget?.deal_details || {}
+    const dealDetails = { ...existingDetails }
+
+    // Store free-text AM name
     if (payload.manager_name_free && !payload.manager_id) {
-      payload.deal_details = { ...(payload.deal_details || {}), account_manager_name: payload.manager_name_free }
+      dealDetails.account_manager_name = payload.manager_name_free
+    } else if (payload.manager_id) {
+      delete dealDetails.account_manager_name
     }
+
+    // Store deal-type-specific fields under deal_details.deal
+    if (payload.deal_type && payload.deal_data && Object.keys(payload.deal_data).length > 0) {
+      dealDetails.deal = payload.deal_data
+    } else if (!payload.deal_type) {
+      // No deal type selected — clear deal data
+      delete dealDetails.deal
+    }
+
+    payload.deal_details = Object.keys(dealDetails).length > 0 ? dealDetails : null
+
+    // Remove form-only fields that aren't DB columns
     delete payload.manager_name_free
+    delete payload.deal_data
+
     let error
     if (editTarget) {
       ({ error } = await supabase.from('affiliates').update(payload).eq('id', editTarget.id))
@@ -248,10 +282,10 @@ export default function AffiliatesPage() {
 
   const exportCSV = () => {
     const toExport = selected.size > 0 ? filtered.filter(a => selected.has(a.id)) : filtered
-    const headers = ['Name', 'Email', 'Phone', 'Status', 'Deal Type', 'Broker', 'Manager', 'Country']
+    const headers = ['Name', 'Email', 'Phone', 'Status', 'Deal Type', 'Broker', 'Manager', 'Master IB', 'Country']
     const rows = toExport.map(a => [
-      a.name, a.email, a.phone || '', a.status, a.deal_type,
-      getBrokerName(a.broker_id), getManagerName(a), a.country || ''
+      a.name, a.email, a.phone || '', a.status, a.deal_type || '',
+      getBrokerName(a.broker_id), getManagerName(a), getMasterIBName(a.master_ib_id), a.country || ''
     ])
     const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -300,6 +334,7 @@ export default function AffiliatesPage() {
               <SelectTrigger className="w-36"><SelectValue placeholder="Deal Type" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="NONE">No Type</SelectItem>
                 {['CPA','PNL','HYBRID','REBATES'].map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -321,6 +356,7 @@ export default function AffiliatesPage() {
                   <TableHead>Email</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Deal Type</TableHead>
+                  <TableHead>Master IB</TableHead>
                   <TableHead>Broker</TableHead>
                   <TableHead>Manager</TableHead>
                   <TableHead>Country</TableHead>
@@ -329,7 +365,7 @@ export default function AffiliatesPage() {
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={canWrite ? 9 : 7} className="text-center py-10 text-muted-foreground">
+                  <TableRow><TableCell colSpan={canWrite ? 10 : 8} className="text-center py-10 text-muted-foreground">
                     <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
                     {canWrite ? 'No affiliates found. Click "Add Affiliate" to get started.' : 'No affiliates found.'}
                   </TableCell></TableRow>
@@ -339,7 +375,8 @@ export default function AffiliatesPage() {
                     <TableCell className="font-medium">{a.name}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{a.email}</TableCell>
                     <TableCell><Badge className={STATUS_COLORS[a.status] || ''}>{a.status}</Badge></TableCell>
-                    <TableCell><Badge variant="outline" className="text-xs">{a.deal_type}</Badge></TableCell>
+                    <TableCell>{a.deal_type ? <Badge variant="outline" className="text-xs">{a.deal_type}</Badge> : <span className="text-xs text-muted-foreground">-</span>}</TableCell>
+                    <TableCell className="text-sm">{getMasterIBName(a.master_ib_id)}</TableCell>
                     <TableCell className="text-sm">{getBrokerName(a.broker_id)}</TableCell>
                     <TableCell className="text-sm">{getManagerName(a)}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{a.country || '-'}</TableCell>
@@ -385,10 +422,23 @@ export default function AffiliatesPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Deal Type</Label>
-                <Select value={form.deal_type} onValueChange={v => setForm(f => ({...f, deal_type: v}))}>
+                <Select value={form.deal_type || '__none__'} onValueChange={v => setForm(f => ({...f, deal_type: v === '__none__' ? '' : v, deal_data: v === '__none__' ? {} : (v !== f.deal_type ? {} : f.deal_data)}))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{['CPA','PNL','HYBRID','REBATES'].map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                  <SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
+                    {['CPA','PNL','HYBRID','REBATES'].map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                  </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Master IB</Label>
+                <AffiliateCombobox
+                  affiliates={affiliates}
+                  value={form.master_ib_id}
+                  onChange={v => setForm(f => ({...f, master_ib_id: v}))}
+                  excludeId={editTarget?.id}
+                  placeholder="Search Master IB..."
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Broker</Label>
@@ -424,6 +474,12 @@ export default function AffiliatesPage() {
                 <Label>Notes</Label>
                 <Input value={form.notes} onChange={e => setForm(f => ({...f, notes: e.target.value}))} placeholder="Additional notes..." />
               </div>
+              {/* Dynamic deal-type-specific fields */}
+              <DealTypeFields
+                dealType={form.deal_type}
+                dealData={form.deal_data}
+                onChange={data => setForm(f => ({...f, deal_data: data}))}
+              />
             </div>
             <div className="flex gap-2 justify-end pt-2">
               <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>

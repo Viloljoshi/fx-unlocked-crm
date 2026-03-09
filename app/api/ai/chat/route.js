@@ -12,7 +12,7 @@ async function fetchContext(message) {
 
   // Fetch ALL core data — no artificial limits
   const [affiliatesRes, brokersRes, commissionsRes, appointmentsRes, kpisRes, staffKpisRes, profilesRes] = await Promise.all([
-    supabase.from('affiliates').select('id, name, email, deal_type, status, broker_id, manager_id, country, source, renewal_date, created_at').order('created_at', { ascending: false }),
+    supabase.from('affiliates').select('id, name, email, deal_type, status, broker_id, manager_id, master_ib_id, country, source, renewal_date, deal_details, created_at').order('created_at', { ascending: false }),
     supabase.from('brokers').select('id, name, is_active, deal_types, account_manager, contact_email').order('name'),
     supabase.from('commissions').select('id, month, year, deal_type, revenue_amount, status, affiliate_id, broker_id, paid_date').order('year', { ascending: false }).order('month', { ascending: false }),
     supabase.from('appointments').select('id, title, affiliate_id, scheduled_at, appointment_type, status, notes').order('scheduled_at', { ascending: false }).limit(50),
@@ -154,11 +154,13 @@ async function fetchContext(message) {
     staffName: profileMap[k.staff_member_id] || k.staff_member_id,
   }))
 
-  // ── Affiliates with manager names ─────────────────────────────────────────────
+  // ── Affiliates with manager names + master IB + deal details ──────────────────
   context.affiliates = affiliates.map(a => ({
     ...a,
-    managerName: a.manager_id ? (profileMap[a.manager_id] || a.manager_id) : null,
-    brokerName:  a.broker_id  ? (brokerMap[a.broker_id]   || a.broker_id)  : null,
+    managerName:  a.manager_id   ? (profileMap[a.manager_id]    || a.manager_id)   : null,
+    brokerName:   a.broker_id    ? (brokerMap[a.broker_id]      || a.broker_id)    : null,
+    masterIBName: a.master_ib_id ? (affiliateMap[a.master_ib_id] || a.master_ib_id) : null,
+    dealDetails:  a.deal_details?.deal || null,
   }))
 
   // ── Brokers ───────────────────────────────────────────────────────────────────

@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS affiliates (
   country TEXT,
   traffic_region TEXT,
   traffic_types TEXT,
-  deal_type TEXT NOT NULL CHECK (deal_type IN ('CPA', 'PNL', 'HYBRID', 'REBATES')),
+  deal_type TEXT CHECK (deal_type IN ('CPA', 'PNL', 'HYBRID', 'REBATES')),
   deal_terms TEXT,
   deal_details JSONB,
   status TEXT DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'ONBOARDING', 'LEAD', 'INACTIVE')),
@@ -63,9 +63,13 @@ CREATE TABLE IF NOT EXISTS affiliates (
   notes TEXT,
   broker_id UUID REFERENCES brokers(id),
   manager_id UUID REFERENCES profiles(id),
+  master_ib_id UUID REFERENCES affiliates(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- Index for master IB lookups
+CREATE INDEX IF NOT EXISTS idx_affiliates_master_ib ON affiliates(master_ib_id);
 
 -- 4. Commissions table
 CREATE TABLE IF NOT EXISTS commissions (

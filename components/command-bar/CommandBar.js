@@ -32,7 +32,8 @@ const ENTITY_CONFIGS = {
       { key: 'phone', label: 'Phone', type: 'text' },
       { key: 'broker_id', label: 'Broker', type: 'search', searchTable: 'brokers', searchField: 'name' },
       { key: 'manager_id', label: 'Manager', type: 'search', searchTable: 'profiles', searchField: 'first_name' },
-      { key: 'deal_type', label: 'Deal Type', type: 'select', options: ['CPA', 'PNL', 'HYBRID', 'REBATES'], required: true },
+      { key: 'master_ib_id', label: 'Master IB', type: 'search', searchTable: 'affiliates', searchField: 'name' },
+      { key: 'deal_type', label: 'Deal Type', type: 'select', options: ['CPA', 'PNL', 'HYBRID', 'REBATES'] },
       { key: 'country', label: 'Country', type: 'text' },
       { key: 'status', label: 'Status', type: 'select', options: ['ACTIVE', 'ONBOARDING', 'LEAD', 'INACTIVE'] },
     ],
@@ -266,6 +267,12 @@ export default function CommandBar({ open, setOpen, userId }) {
       const config = ENTITY_CONFIGS[entityType]
       const insertData = { ...data }
 
+      if (entityType === 'affiliate') {
+        if (!insertData.broker_id) delete insertData.broker_id
+        if (!insertData.manager_id) delete insertData.manager_id
+        if (!insertData.master_ib_id) delete insertData.master_ib_id
+        if (!insertData.deal_type) insertData.deal_type = null
+      }
       if (entityType === 'revenue') {
         insertData.month = parseInt(insertData.month)
         insertData.year = parseInt(insertData.year)

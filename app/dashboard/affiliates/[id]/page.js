@@ -15,9 +15,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { ArrowLeft, Mail, Phone, Globe, MapPin, Calendar, Edit2, Save, X, ChevronDown, Plus } from 'lucide-react'
+import { ArrowLeft, Mail, Phone, Globe, MapPin, Calendar, Edit2, Save, X, ChevronDown, Plus, Users } from 'lucide-react'
 import Link from 'next/link'
 import { useUserRole } from '@/lib/hooks/useUserRole'
+import DealTypeFields from '@/components/deal-type-fields/DealTypeFields'
+import AffiliateCombobox from '@/components/affiliate-combobox/AffiliateCombobox'
 
 // Combobox for free-text + profile search
 function ManagerCombobox({ profiles, value, valueText, onChange, onChangeText }) {
@@ -97,6 +99,9 @@ export default function AffiliateDetailPage() {
   const [affiliate, setAffiliate] = useState(null)
   const [broker, setBroker] = useState(null)
   const [manager, setManager] = useState(null)
+  const [masterIB, setMasterIB] = useState(null)
+  const [subAffiliates, setSubAffiliates] = useState([])
+  const [allAffiliates, setAllAffiliates] = useState([])
   const [brokers, setBrokers] = useState([])
   const [profiles, setProfiles] = useState([])
   const [notes, setNotes] = useState([])
@@ -106,6 +111,7 @@ export default function AffiliateDetailPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [editForm, setEditForm] = useState({})
   const [editManagerNameFree, setEditManagerNameFree] = useState('')
+  const [editDealData, setEditDealData] = useState({})
   const [dealNotes, setDealNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
@@ -114,20 +120,25 @@ export default function AffiliateDetailPage() {
 
   const load = async () => {
     setLoading(true)
-    const [affRes, brkListRes, profListRes] = await Promise.all([
+    const [affRes, brkListRes, profListRes, allAffRes] = await Promise.all([
       supabase.from('affiliates').select('*').eq('id', id).single(),
       supabase.from('brokers').select('id, name'),
       supabase.from('profiles').select('id, first_name, last_name'),
+      supabase.from('affiliates').select('id, name, status, deal_type'),
     ])
     const aff = affRes.data
+    setAllAffiliates(allAffRes.data || [])
     if (aff) {
       setAffiliate(aff)
       setEditForm({
         ...aff,
         broker_id: aff.broker_id || 'none',
         manager_id: aff.manager_id || 'none',
+        master_ib_id: aff.master_ib_id || 'none',
+        deal_type: aff.deal_type || '',
       })
       setEditManagerNameFree(aff.deal_details?.account_manager_name || '')
+      setEditDealData(aff.deal_details?.deal || {})
       setDealNotes(aff.deal_details?.notes || '')
       if (aff.broker_id) {
         const { data: brk } = await supabase.from('brokers').select('*').eq('id', aff.broker_id).single()
@@ -137,6 +148,15 @@ export default function AffiliateDetailPage() {
         const { data: mgr } = await supabase.from('profiles').select('*').eq('id', aff.manager_id).single()
         setManager(mgr)
       }
+      if (aff.master_ib_id) {
+        const { data: mib } = await supabase.from('affiliates').select('id, name').eq('id', aff.master_ib_id).single()
+        setMasterIB(mib)
+      } else {
+        setMasterIB(null)
+      }
+      // Fetch sub-affiliates
+      const { data: subs } = await supabase.from('affiliates').select('id, name, status, deal_type').eq('master_ib_id', id)
+      setSubAffiliates(subs || [])
     }
     setBrokers(brkListRes.data || [])
     setProfiles(profListRes.data || [])
@@ -154,17 +174,32 @@ export default function AffiliateDetailPage() {
   const handleEdit = async () => {
     setSaving(true)
     const payload = { ...editForm }
+
+    // Handle FK references
     if (!payload.broker_id || payload.broker_id === 'none') payload.broker_id = null
     if (!payload.manager_id || payload.manager_id === 'none') payload.manager_id = null
-    // Store free-text AM name in deal_details
+    if (!payload.master_ib_id || payload.master_ib_id === 'none') payload.master_ib_id = null
+    if (!payload.deal_type) payload.deal_type = null
+
+    // Build deal_details
+    const dealDetails = { ...(affiliate?.deal_details || {}) }
+
+    // Free-text AM name
     if (editManagerNameFree && !payload.manager_id) {
-      payload.deal_details = { ...(payload.deal_details || {}), account_manager_name: editManagerNameFree }
+      dealDetails.account_manager_name = editManagerNameFree
     } else if (payload.manager_id) {
-      // Clear free-text name if a linked profile is selected
-      const existing = payload.deal_details || {}
-      delete existing.account_manager_name
-      payload.deal_details = existing
+      delete dealDetails.account_manager_name
     }
+
+    // Deal-type-specific data
+    if (payload.deal_type && editDealData && Object.keys(editDealData).length > 0) {
+      dealDetails.deal = editDealData
+    } else if (!payload.deal_type) {
+      delete dealDetails.deal
+    }
+
+    payload.deal_details = Object.keys(dealDetails).length > 0 ? dealDetails : null
+
     const { error } = await supabase.from('affiliates').update(payload).eq('id', id)
     if (error) { toast.error(error.message); setSaving(false); return }
     toast.success('Affiliate updated')
@@ -209,7 +244,7 @@ export default function AffiliateDetailPage() {
             <h1 className="text-2xl font-outfit font-bold">{affiliate.name}</h1>
             <div className="flex items-center gap-2 mt-0.5">
               <Badge className={STATUS_COLORS[affiliate.status] || ''}>{affiliate.status}</Badge>
-              <Badge variant="outline" className="text-xs">{affiliate.deal_type}</Badge>
+              {affiliate.deal_type ? <Badge variant="outline" className="text-xs">{affiliate.deal_type}</Badge> : <Badge variant="outline" className="text-xs text-muted-foreground">No Deal Type</Badge>}
             </div>
           </div>
         </div>
@@ -253,6 +288,7 @@ export default function AffiliateDetailPage() {
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3"><CardTitle className="text-base">Details</CardTitle></CardHeader>
           <CardContent className="grid sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+            <div><span className="text-muted-foreground block text-xs">Master IB</span><p className="font-medium">{masterIB ? <Link href={`/dashboard/affiliates/${masterIB.id}`} className="text-primary hover:underline">{masterIB.name}</Link> : '-'}</p></div>
             <div><span className="text-muted-foreground block text-xs">Broker</span><p className="font-medium">{broker?.name || '-'}</p></div>
             <div><span className="text-muted-foreground block text-xs">Manager</span><p className="font-medium">{manager ? `${manager.first_name} ${manager.last_name}` : affiliate.deal_details?.account_manager_name || '-'}</p></div>
             <div><span className="text-muted-foreground block text-xs">Traffic Region</span><p className="font-medium">{affiliate.traffic_region || '-'}</p></div>
@@ -261,6 +297,12 @@ export default function AffiliateDetailPage() {
             <div><span className="text-muted-foreground block text-xs">Renewal Date</span><p className="font-medium">{affiliate.renewal_date ? new Date(affiliate.renewal_date).toLocaleDateString() : '-'}</p></div>
             {affiliate.deal_terms && <div className="sm:col-span-2"><span className="text-muted-foreground block text-xs">Deal Terms</span><p className="font-medium mt-0.5">{affiliate.deal_terms}</p></div>}
             {affiliate.notes && <div className="sm:col-span-2"><span className="text-muted-foreground block text-xs">Notes</span><p className="font-medium mt-0.5">{affiliate.notes}</p></div>}
+            {/* Read-only deal-type-specific fields */}
+            {affiliate.deal_type && affiliate.deal_details?.deal && (
+              <div className="sm:col-span-2">
+                <DealTypeFields dealType={affiliate.deal_type} dealData={affiliate.deal_details.deal} readOnly />
+              </div>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -282,6 +324,31 @@ export default function AffiliateDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Sub-Affiliates */}
+      {subAffiliates.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2"><Users className="w-4 h-4" /> Sub-Affiliates ({subAffiliates.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-lg border overflow-hidden">
+              <Table>
+                <TableHeader><TableRow className="bg-muted/50"><TableHead>Name</TableHead><TableHead>Status</TableHead><TableHead>Deal Type</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {subAffiliates.map(sub => (
+                    <TableRow key={sub.id} className="cursor-pointer hover:bg-muted/30" onClick={() => window.location.href = `/dashboard/affiliates/${sub.id}`}>
+                      <TableCell className="font-medium">{sub.name}</TableCell>
+                      <TableCell><Badge className={STATUS_COLORS[sub.status] || ''}>{sub.status}</Badge></TableCell>
+                      <TableCell>{sub.deal_type ? <Badge variant="outline" className="text-xs">{sub.deal_type}</Badge> : <span className="text-xs text-muted-foreground">-</span>}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tabs */}
       <Tabs defaultValue="notes">
@@ -433,10 +500,23 @@ export default function AffiliateDetailPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Deal Type</Label>
-                <Select value={editForm.deal_type || 'CPA'} onValueChange={v => setEditForm(f => ({...f, deal_type: v}))}>
+                <Select value={editForm.deal_type || '__none__'} onValueChange={v => { const dt = v === '__none__' ? '' : v; setEditForm(f => ({...f, deal_type: dt})); if (dt !== editForm.deal_type) setEditDealData({}); }}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{['CPA','PNL','HYBRID','REBATES'].map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                  <SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
+                    {['CPA','PNL','HYBRID','REBATES'].map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                  </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Master IB</Label>
+                <AffiliateCombobox
+                  affiliates={allAffiliates}
+                  value={editForm.master_ib_id || 'none'}
+                  onChange={v => setEditForm(f => ({...f, master_ib_id: v}))}
+                  excludeId={id}
+                  placeholder="Search Master IB..."
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Broker</Label>
@@ -471,6 +551,12 @@ export default function AffiliateDetailPage() {
                 <Label>Notes</Label>
                 <Input value={editForm.notes || ''} onChange={e => setEditForm(f => ({...f, notes: e.target.value}))} />
               </div>
+              {/* Dynamic deal-type-specific fields */}
+              <DealTypeFields
+                dealType={editForm.deal_type}
+                dealData={editDealData}
+                onChange={setEditDealData}
+              />
             </div>
             <div className="flex gap-2 justify-end pt-2">
               <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
