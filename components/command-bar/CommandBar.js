@@ -322,7 +322,7 @@ export default function CommandBar({ open, setOpen, userId }) {
       } else if (field?.type === 'select') {
         if (e.key === 'ArrowDown') { e.preventDefault(); const opts = field.options; const idx = opts.indexOf(input); setInput(opts[Math.min(idx + 1, opts.length - 1)] || opts[0]); return }
         if (e.key === 'ArrowUp') { e.preventDefault(); const opts = field.options; const idx = opts.indexOf(input); setInput(opts[Math.max(idx - 1, 0)] || opts[0]); return }
-        if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); advanceStep(input || field.options[0]); return }
+        if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); if (!field.required && !input) { advanceStep(''); } else { advanceStep(input || field.options[0]); } return }
       } else {
         if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); advanceStep(); return }
       }
@@ -461,6 +461,12 @@ export default function CommandBar({ open, setOpen, userId }) {
                   {opt}
                 </button>
               ))}
+              {!currentField.required && (
+                <button onClick={() => advanceStep('')}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm hover:bg-muted/50 text-muted-foreground transition-colors text-left border-t border-border mt-1 pt-2">
+                  Skip &rarr;
+                </button>
+              )}
             </div>
           )}
 

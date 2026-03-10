@@ -200,8 +200,22 @@ export async function POST(request) {
     const { user } = await getAuthUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { message, history = [] } = await request.json()
+    // Verify user has a valid role in the system (prevents unauthorized access)
+    const adminClient = createAdminClient()
+    const { data: profile, error: profileError } = await adminClient
+      .from('profiles')
+      .select('id, role')
+      .eq('id', user.id)
+      .single()
+    if (profileError || !profile || !['ADMIN', 'STAFF', 'VIEWER'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden — no valid CRM role' }, { status: 403 })
+    }
+
+    const body = await request.json()
+    const message = typeof body?.message === 'string' ? body.message.trim() : ''
+    const history = Array.isArray(body?.history) ? body.history : []
     if (!message) return NextResponse.json({ error: 'Message is required' }, { status: 400 })
+    if (message.length > 2000) return NextResponse.json({ error: 'Message too long' }, { status: 400 })
 
     const context = await fetchContext(message)
 

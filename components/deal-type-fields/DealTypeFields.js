@@ -187,9 +187,10 @@ export default function DealTypeFields({ dealType, dealData = {}, onChange, read
 
   const update = (key, val) => onChange({ ...dealData, [key]: val })
 
-  const showCPA = dealType === 'CPA' || dealType === 'HYBRID'
-  const showRebates = dealType === 'REBATES' || dealType === 'HYBRID'
-  const showPnL = dealType === 'PNL'
+  const isCPA = dealType === 'CPA'
+  const isRebates = dealType === 'REBATES'
+  const isPnL = dealType === 'PNL'
+  const isHybrid = dealType === 'HYBRID'
 
   return (
     <div className="col-span-2 space-y-4 border-t pt-4 mt-2">
@@ -197,66 +198,42 @@ export default function DealTypeFields({ dealType, dealData = {}, onChange, read
         {dealType} Deal Fields
       </p>
 
-      {/* CPA-specific fields */}
-      {showCPA && (
+      {/* ── CPA (pure) ────────────────────────────────────────────── */}
+      {isCPA && (
         <>
-          {dealType === 'CPA' && (
-            <div className="space-y-1.5">
-              <Label>FTDs per Month</Label>
-              {readOnly ? (
-                <p className="text-sm font-medium">{dealData.ftds_per_month || '-'}</p>
-              ) : (
-                <Input type="number" min="0" value={dealData.ftds_per_month || ''} onChange={e => update('ftds_per_month', e.target.value)} placeholder="e.g. 50" />
-              )}
-            </div>
-          )}
-          <CPATiers
-            tiers={dealData.cpa_tiers || []}
-            onChange={val => update('cpa_tiers', val)}
-            readOnly={readOnly}
-          />
-          {dealType === 'CPA' && (
-            <div className="space-y-1.5">
-              <Label>Expected ROI</Label>
-              {readOnly ? (
-                <p className="text-sm font-medium">{dealData.expected_roi || '-'}</p>
-              ) : (
-                <Input type="number" min="0" step="0.1" value={dealData.expected_roi || ''} onChange={e => update('expected_roi', e.target.value)} placeholder="e.g. 1.5" />
-              )}
-            </div>
-          )}
+          <div className="space-y-1.5">
+            <Label>FTDs per Month</Label>
+            {readOnly ? (
+              <p className="text-sm font-medium">{dealData.ftds_per_month || '-'}</p>
+            ) : (
+              <Input type="number" min="0" value={dealData.ftds_per_month || ''} onChange={e => update('ftds_per_month', e.target.value)} placeholder="e.g. 50" />
+            )}
+          </div>
+          <CPATiers tiers={dealData.cpa_tiers || []} onChange={val => update('cpa_tiers', val)} readOnly={readOnly} />
+          <div className="space-y-1.5">
+            <Label>Expected ROI</Label>
+            {readOnly ? (
+              <p className="text-sm font-medium">{dealData.expected_roi || '-'}</p>
+            ) : (
+              <Input type="number" min="0" step="0.1" value={dealData.expected_roi || ''} onChange={e => update('expected_roi', e.target.value)} placeholder="e.g. 1.5" />
+            )}
+          </div>
         </>
       )}
 
-      {/* Rebates-specific fields */}
-      {showRebates && (
+      {/* ── Rebates (pure) ────────────────────────────────────────── */}
+      {isRebates && (
         <>
-          <NetDepositsField
-            value={dealData.net_deposits_per_month}
-            onChange={val => update('net_deposits_per_month', val)}
-            readOnly={readOnly}
-          />
-          <ExpectedVolumeField
-            value={dealData.expected_volume_per_month}
-            onChange={val => update('expected_volume_per_month', val)}
-            readOnly={readOnly}
-          />
-          <RebatesPerLot
-            data={dealData.rebates_per_lot || {}}
-            onChange={val => update('rebates_per_lot', val)}
-            readOnly={readOnly}
-          />
+          <NetDepositsField value={dealData.net_deposits_per_month} onChange={val => update('net_deposits_per_month', val)} readOnly={readOnly} />
+          <ExpectedVolumeField value={dealData.expected_volume_per_month} onChange={val => update('expected_volume_per_month', val)} readOnly={readOnly} />
+          <RebatesPerLot data={dealData.rebates_per_lot || {}} onChange={val => update('rebates_per_lot', val)} readOnly={readOnly} />
         </>
       )}
 
-      {/* PnL-specific fields */}
-      {showPnL && (
+      {/* ── PnL ───────────────────────────────────────────────────── */}
+      {isPnL && (
         <>
-          <NetDepositsField
-            value={dealData.net_deposits_per_month}
-            onChange={val => update('net_deposits_per_month', val)}
-            readOnly={readOnly}
-          />
+          <NetDepositsField value={dealData.net_deposits_per_month} onChange={val => update('net_deposits_per_month', val)} readOnly={readOnly} />
           <div className="space-y-1.5">
             <Label>PnL Deal Needed</Label>
             {readOnly ? (
@@ -268,7 +245,16 @@ export default function DealTypeFields({ dealType, dealData = {}, onChange, read
         </>
       )}
 
-      {/* Hybrid: Net Deposits + Volume are shown via showRebates above */}
+      {/* ── Hybrid (CPA + Rebates) ────────────────────────────────── */}
+      {/* Order: Net Deposits → Volume → CPA Tiers → Rebates per Lot */}
+      {isHybrid && (
+        <>
+          <NetDepositsField value={dealData.net_deposits_per_month} onChange={val => update('net_deposits_per_month', val)} readOnly={readOnly} />
+          <ExpectedVolumeField value={dealData.expected_volume_per_month} onChange={val => update('expected_volume_per_month', val)} readOnly={readOnly} />
+          <CPATiers tiers={dealData.cpa_tiers || []} onChange={val => update('cpa_tiers', val)} readOnly={readOnly} />
+          <RebatesPerLot data={dealData.rebates_per_lot || {}} onChange={val => update('rebates_per_lot', val)} readOnly={readOnly} />
+        </>
+      )}
 
       {/* Shared: Deal Notes + Start Date (all deal types) */}
       <DealNotesField value={dealData.deal_notes} onChange={val => update('deal_notes', val)} readOnly={readOnly} />

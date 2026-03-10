@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -94,6 +94,7 @@ const STATUS_COLORS = {
 
 export default function AffiliateDetailPage() {
   const { id } = useParams()
+  const router = useRouter()
   const { role } = useUserRole()
   const canWrite = role === 'ADMIN' || role === 'STAFF'
   const [affiliate, setAffiliate] = useState(null)
@@ -249,7 +250,19 @@ export default function AffiliateDetailPage() {
           </div>
         </div>
         {canWrite && (
-          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+          <Button variant="outline" size="sm" onClick={() => {
+            // Reset form state from current affiliate data to avoid stale state after cancel
+            setEditForm({
+              ...affiliate,
+              broker_id: affiliate.broker_id || 'none',
+              manager_id: affiliate.manager_id || 'none',
+              master_ib_id: affiliate.master_ib_id || 'none',
+              deal_type: affiliate.deal_type || '',
+            })
+            setEditManagerNameFree(affiliate.deal_details?.account_manager_name || '')
+            setEditDealData(affiliate.deal_details?.deal || {})
+            setEditOpen(true)
+          }}>
             <Edit2 className="w-4 h-4 mr-1" /> Edit
           </Button>
         )}
@@ -337,7 +350,7 @@ export default function AffiliateDetailPage() {
                 <TableHeader><TableRow className="bg-muted/50"><TableHead>Name</TableHead><TableHead>Status</TableHead><TableHead>Deal Type</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {subAffiliates.map(sub => (
-                    <TableRow key={sub.id} className="cursor-pointer hover:bg-muted/30" onClick={() => window.location.href = `/dashboard/affiliates/${sub.id}`}>
+                    <TableRow key={sub.id} className="cursor-pointer hover:bg-muted/30" onClick={() => router.push(`/dashboard/affiliates/${sub.id}`)}>
                       <TableCell className="font-medium">{sub.name}</TableCell>
                       <TableCell><Badge className={STATUS_COLORS[sub.status] || ''}>{sub.status}</Badge></TableCell>
                       <TableCell>{sub.deal_type ? <Badge variant="outline" className="text-xs">{sub.deal_type}</Badge> : <span className="text-xs text-muted-foreground">-</span>}</TableCell>
