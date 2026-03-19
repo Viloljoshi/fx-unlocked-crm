@@ -89,19 +89,20 @@ export default function LoginPage() {
       {/* Brand mark above card */}
       <div className="flex flex-col items-center mb-7">
         <div className="mb-3 drop-shadow-md">
-          <svg width="48" height="48" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg width="56" height="56" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
             <defs>
-              <linearGradient id="fxLoginGrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+              <linearGradient id="fxLoginGrad" x1="3" y1="5" x2="37" y2="35" gradientUnits="userSpaceOnUse">
                 <stop offset="0%" stopColor="#22d3ee" />
                 <stop offset="50%" stopColor="#3b82f6" />
                 <stop offset="100%" stopColor="#8b5cf6" />
               </linearGradient>
             </defs>
-            <path d="M16 2L28 9V23L16 30L4 23V9L16 2Z" fill="url(#fxLoginGrad)" />
-            <path d="M16 8L23 12.5V21.5L16 26L9 21.5V12.5L16 8Z" fill="white" opacity="0.2" />
-            <circle cx="16" cy="16" r="2.5" fill="white" opacity="0.95" />
-            <circle cx="10.5" cy="13" r="1.8" fill="white" opacity="0.65" />
-            <circle cx="21.5" cy="13" r="1.8" fill="white" opacity="0.65" />
+            {/* Outer flat-top hex + 3 chain-link holes matching FX Unlocked brand icon */}
+            <path
+              fillRule="evenodd"
+              fill="url(#fxLoginGrad)"
+              d="M37,20 L28.5,5.3 L11.5,5.3 L3,20 L11.5,34.7 L28.5,34.7 Z M26,12.5 L23,7.3 L17,7.3 L14,12.5 L17,17.7 L23,17.7 Z M19.5,26 L16.5,20.8 L10.5,20.8 L7.5,26 L10.5,31.2 L16.5,31.2 Z M32.5,26 L29.5,20.8 L23.5,20.8 L20.5,26 L23.5,31.2 L29.5,31.2 Z"
+            />
           </svg>
         </div>
         <h1 className="text-xl font-bold text-gray-900 tracking-tight">FX Unlocked</h1>
