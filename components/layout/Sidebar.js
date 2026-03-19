@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, Building2, DollarSign, UserCog, Shield,
-  BarChart3, ScrollText, TrendingUp, MessageSquare, Settings, X, ChevronLeft, ChevronRight, Calendar, LineChart, PieChart
+  BarChart3, ScrollText, TrendingUp, MessageSquare, Settings, X, ChevronLeft, ChevronRight, Calendar, LineChart
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button'
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Affiliates/IBs', href: '/dashboard/affiliates', icon: Users },
-  { name: 'Affiliate Dashboard', href: '/dashboard/affiliates-dashboard', icon: PieChart },
   { name: 'Brokers', href: '/dashboard/brokers', icon: Building2 },
   { name: 'Revenue', href: '/dashboard/revenue', icon: DollarSign },
   { name: 'Appointments', href: '/dashboard/appointments', icon: Calendar },
@@ -33,23 +32,21 @@ const personalItems = [
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]
 
-// FX Unlocked chain-link hexagon logo — matches brand icon exactly
-// Flat-top outer hex with 3 inner hexagonal holes (trefoil/chain pattern)
+// FX Unlocked logo — flat-top hex ring with 2 side-by-side holes + bridge (chain-link)
 function FXLogo({ size = 32 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <linearGradient id="fxGrad" x1="3" y1="5" x2="37" y2="35" gradientUnits="userSpaceOnUse">
+        <linearGradient id="fxGrad" x1="3" y1="20" x2="37" y2="20" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#22d3ee" />
           <stop offset="50%" stopColor="#3b82f6" />
           <stop offset="100%" stopColor="#8b5cf6" />
         </linearGradient>
       </defs>
-      {/* Outer flat-top hexagon + 3 inner chain-link holes (evenodd = holes cut out) */}
       <path
         fillRule="evenodd"
         fill="url(#fxGrad)"
-        d="M37,20 L28.5,5.3 L11.5,5.3 L3,20 L11.5,34.7 L28.5,34.7 Z M26,12.5 L23,7.3 L17,7.3 L14,12.5 L17,17.7 L23,17.7 Z M19.5,26 L16.5,20.8 L10.5,20.8 L7.5,26 L10.5,31.2 L16.5,31.2 Z M32.5,26 L29.5,20.8 L23.5,20.8 L20.5,26 L23.5,31.2 L29.5,31.2 Z"
+        d="M37,20 L28.5,5.3 L11.5,5.3 L3,20 L11.5,34.7 L28.5,34.7 Z M19,20 L15.75,14.4 L9.25,14.4 L6,20 L9.25,25.6 L15.75,25.6 Z M34,20 L30.75,14.4 L24.25,14.4 L21,20 L24.25,25.6 L30.75,25.6 Z"
       />
     </svg>
   )

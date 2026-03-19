@@ -91,17 +91,16 @@ export default function LoginPage() {
         <div className="mb-3 drop-shadow-md">
           <svg width="56" height="56" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
             <defs>
-              <linearGradient id="fxLoginGrad" x1="3" y1="5" x2="37" y2="35" gradientUnits="userSpaceOnUse">
+              <linearGradient id="fxLoginGrad" x1="3" y1="20" x2="37" y2="20" gradientUnits="userSpaceOnUse">
                 <stop offset="0%" stopColor="#22d3ee" />
                 <stop offset="50%" stopColor="#3b82f6" />
                 <stop offset="100%" stopColor="#8b5cf6" />
               </linearGradient>
             </defs>
-            {/* Outer flat-top hex + 3 chain-link holes matching FX Unlocked brand icon */}
             <path
               fillRule="evenodd"
               fill="url(#fxLoginGrad)"
-              d="M37,20 L28.5,5.3 L11.5,5.3 L3,20 L11.5,34.7 L28.5,34.7 Z M26,12.5 L23,7.3 L17,7.3 L14,12.5 L17,17.7 L23,17.7 Z M19.5,26 L16.5,20.8 L10.5,20.8 L7.5,26 L10.5,31.2 L16.5,31.2 Z M32.5,26 L29.5,20.8 L23.5,20.8 L20.5,26 L23.5,31.2 L29.5,31.2 Z"
+              d="M37,20 L28.5,5.3 L11.5,5.3 L3,20 L11.5,34.7 L28.5,34.7 Z M19,20 L15.75,14.4 L9.25,14.4 L6,20 L9.25,25.6 L15.75,25.6 Z M34,20 L30.75,14.4 L24.25,14.4 L21,20 L24.25,25.6 L30.75,25.6 Z"
             />
           </svg>
         </div>
