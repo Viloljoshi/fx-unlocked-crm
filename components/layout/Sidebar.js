@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import Logo from '@/components/ui/Logo'
 
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -82,9 +83,8 @@ export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobile
     <div className="flex flex-col h-full">
       <div className="p-4 flex items-center justify-between border-b border-border/50">
         {!collapsed && (
-          <div className="flex items-center gap-2.5">
-            <FXLogo size={32} />
-            <span className="font-outfit font-bold text-lg tracking-tight">FX Unlocked</span>
+          <div className="flex items-center">
+            <Logo height={34} />
           </div>
         )}
         {collapsed && (

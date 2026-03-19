@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import { Eye, EyeOff, ArrowLeft, CheckCircle2 } from 'lucide-react'
+import Logo from '@/components/ui/Logo'
 
 export default function LoginPage() {
   const [mode, setMode] = useState('login') // 'login' | 'forgot'
@@ -89,22 +90,8 @@ export default function LoginPage() {
       {/* Brand mark above card */}
       <div className="flex flex-col items-center mb-7">
         <div className="mb-3 drop-shadow-md">
-          <svg width="56" height="56" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="fxLoginGrad" x1="3" y1="20" x2="37" y2="20" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#22d3ee" />
-                <stop offset="50%" stopColor="#3b82f6" />
-                <stop offset="100%" stopColor="#8b5cf6" />
-              </linearGradient>
-            </defs>
-            <path
-              fillRule="evenodd"
-              fill="url(#fxLoginGrad)"
-              d="M37,20 L28.5,5.3 L11.5,5.3 L3,20 L11.5,34.7 L28.5,34.7 Z M19,20 L15.75,14.4 L9.25,14.4 L6,20 L9.25,25.6 L15.75,25.6 Z M34,20 L30.75,14.4 L24.25,14.4 L21,20 L24.25,25.6 L30.75,25.6 Z"
-            />
-          </svg>
+          <Logo height={52} />
         </div>
-        <h1 className="text-xl font-bold text-gray-900 tracking-tight">FX Unlocked</h1>
         <p className="text-sm text-gray-500 mt-0.5">CRM &amp; Operations Platform</p>
       </div>
 
