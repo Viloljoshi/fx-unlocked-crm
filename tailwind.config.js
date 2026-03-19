@@ -56,9 +56,10 @@ module.exports = {
                 success: '#10B981',
                 warning: '#F59E0B',
                 danger: '#EF4444',
-                'fx-green': '#22C55E',   /* primary brand green */
-                'fx-blue': '#22C55E',    /* legacy alias → now green */
-                'fx-purple': '#8B5CF6',
+                'fx-green': '#22C55E',   /* kept for any legacy green usage */
+                'fx-blue': '#3B82F6',    /* FX Unlocked brand blue */
+                'fx-cyan': '#22D3EE',    /* FX Unlocked brand cyan */
+                'fx-purple': '#8B5CF6',  /* FX Unlocked brand purple */
                 chart: {
                     '1': 'hsl(var(--chart-1))',
                     '2': 'hsl(var(--chart-2))',

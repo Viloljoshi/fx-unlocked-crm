@@ -13,11 +13,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
-import { UserPlus, Users, Mail, Trash2, KeyRound, Eye, EyeOff, ShieldAlert } from 'lucide-react'
+import { UserPlus, Users, Mail, Trash2, KeyRound, Eye, EyeOff, ShieldAlert, Pencil } from 'lucide-react'
 import { useUserRole } from '@/lib/hooks/useUserRole'
 
+const CURRENCIES = ['USD', 'GBP', 'EUR', 'AUD', 'CAD', 'NZD']
+
 export default function UsersPage() {
-  const { role, loading: roleLoading } = useUserRole()
+  const { role, userId: currentUserId, loading: roleLoading } = useUserRole()
   const isAdmin = role === 'ADMIN'
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -32,6 +34,10 @@ export default function UsersPage() {
   const [inviteSent, setInviteSent] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  // Edit user state
+  const [editTarget, setEditTarget] = useState(null)
+  const [editForm, setEditForm] = useState({})
+  const [editSaving, setEditSaving] = useState(false)
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
@@ -39,13 +45,11 @@ export default function UsersPage() {
   const load = async () => {
     setLoading(true)
     try {
-      // Use API route to get users with emails (merged from auth.users)
       const res = await fetch('/api/users')
       if (res.ok) {
         const data = await res.json()
         setUsers(data.users || [])
       } else {
-        // Fallback: load profiles only
         const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
         setUsers(data || [])
       }
@@ -94,18 +98,52 @@ export default function UsersPage() {
     setInviteSent(false)
   }
 
-  const toggleRole = async (userId, newRole) => {
-    const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId)
-    if (error) { toast.error(error.message); return }
-    toast.success('Role updated')
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u))
+  const openEdit = (u) => {
+    setEditTarget(u)
+    setEditForm({
+      first_name: u.first_name || '',
+      last_name: u.last_name || '',
+      role: u.role || 'STAFF',
+      is_active: u.is_active !== false,
+      start_date: u.start_date || '',
+      salary: u.salary != null ? String(u.salary) : '',
+      salary_currency: u.salary_currency || 'USD',
+    })
   }
 
-  const toggleActive = async (userId, isActive) => {
-    const { error } = await supabase.from('profiles').update({ is_active: !isActive }).eq('id', userId)
-    if (error) { toast.error(error.message); return }
-    toast.success(isActive ? 'User deactivated' : 'User activated')
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_active: !isActive } : u))
+  const handleEditSave = async () => {
+    if (!editTarget) return
+    // Security: prevent removing own ADMIN role
+    if (editTarget.id === currentUserId && editForm.role !== 'ADMIN') {
+      toast.error("You can't downgrade your own Admin role")
+      return
+    }
+    // Security: prevent deactivating own account
+    if (editTarget.id === currentUserId && !editForm.is_active) {
+      toast.error("You can't deactivate your own account")
+      return
+    }
+    // Validate salary
+    if (editForm.salary !== '' && (isNaN(parseFloat(editForm.salary)) || parseFloat(editForm.salary) < 0)) {
+      toast.error('Salary must be a positive number')
+      return
+    }
+    setEditSaving(true)
+    const payload = {
+      first_name: editForm.first_name.trim() || null,
+      last_name: editForm.last_name.trim() || null,
+      role: editForm.role,
+      is_active: editForm.is_active,
+      start_date: editForm.start_date || null,
+      salary: editForm.salary !== '' ? parseFloat(editForm.salary) : null,
+      salary_currency: editForm.salary_currency || 'USD',
+    }
+    const { error } = await supabase.from('profiles').update(payload).eq('id', editTarget.id)
+    if (error) { toast.error(error.message); setEditSaving(false); return }
+    toast.success('User updated')
+    setEditTarget(null)
+    setEditSaving(false)
+    load()
   }
 
   const deleteUser = async () => {
@@ -132,8 +170,7 @@ export default function UsersPage() {
   const sendPasswordReset = async (email) => {
     if (!email) { toast.error('No email address for this user'); return }
     try {
-      const supabaseClient = createClient()
-      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       })
       if (error) throw error
@@ -147,6 +184,12 @@ export default function UsersPage() {
     if (!u) return ''
     const name = `${u.first_name || ''} ${u.last_name || ''}`.trim()
     return name || '(Name not set)'
+  }
+
+  const formatSalary = (u) => {
+    if (u.salary == null || u.salary === '') return '-'
+    const symbol = { USD: '$', GBP: '£', EUR: '€', AUD: 'A$', CAD: 'C$', NZD: 'NZ$' }[u.salary_currency] || ''
+    return `${symbol}${Number(u.salary).toLocaleString()}`
   }
 
   if (roleLoading || loading) return <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
@@ -181,24 +224,24 @@ export default function UsersPage() {
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Salary</TableHead>
                   <TableHead>Joined</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {users.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                  <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                     <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
                     No users yet. Invite someone to get started.
                   </TableCell></TableRow>
                 ) : users.map(u => (
                   <TableRow key={u.id} className="hover:bg-muted/30">
                     <TableCell>
-                      <div>
-                        <p className={`font-medium text-sm ${
-                          !u.first_name && !u.last_name ? 'text-muted-foreground italic' : ''
-                        }`}>{getDisplayName(u)}</p>
-                      </div>
+                      <p className={`font-medium text-sm ${!u.first_name && !u.last_name ? 'text-muted-foreground italic' : ''}`}>
+                        {getDisplayName(u)}
+                        {u.id === currentUserId && <span className="ml-1.5 text-xs text-muted-foreground">(you)</span>}
+                      </p>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       <div className="flex items-center gap-1">
@@ -207,14 +250,7 @@ export default function UsersPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Select value={u.role || 'STAFF'} onValueChange={v => toggleRole(u.id, v)}>
-                        <SelectTrigger className="w-28 h-8 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ADMIN">ADMIN</SelectItem>
-                          <SelectItem value="STAFF">STAFF</SelectItem>
-                          <SelectItem value="VIEWER">VIEWER</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Badge variant="outline" className="text-xs">{u.role || 'STAFF'}</Badge>
                     </TableCell>
                     <TableCell>
                       <Badge className={u.is_active !== false
@@ -222,25 +258,29 @@ export default function UsersPage() {
                         : 'bg-red-50 text-red-700 border-red-200'
                       }>{u.is_active !== false ? 'Active' : 'Inactive'}</Badge>
                     </TableCell>
+                    <TableCell className="text-sm font-medium">{formatSalary(u)}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" className="h-7 text-xs"
-                          onClick={() => toggleActive(u.id, u.is_active !== false)}>
-                          {u.is_active !== false ? 'Deactivate' : 'Activate'}
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                          title="Edit user"
+                          onClick={() => openEdit(u)}>
+                          <Pencil className="w-3.5 h-3.5" />
                         </Button>
                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
                           title="Send password reset email"
                           onClick={() => sendPasswordReset(u.email)}>
                           <KeyRound className="w-3.5 h-3.5" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
-                          title="Delete user"
-                          onClick={() => setDeleteTarget(u)}>
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                        {u.id !== currentUserId && (
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+                            title="Delete user"
+                            onClick={() => setDeleteTarget(u)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -250,6 +290,100 @@ export default function UsersPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Edit User Dialog */}
+      <Dialog open={!!editTarget} onOpenChange={(o) => { if (!o) setEditTarget(null) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-4 h-4" /> Edit User — {getDisplayName(editTarget)}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>First Name</Label>
+                <Input value={editForm.first_name || ''} onChange={e => setEditForm(f => ({...f, first_name: e.target.value}))} placeholder="First name" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Last Name</Label>
+                <Input value={editForm.last_name || ''} onChange={e => setEditForm(f => ({...f, last_name: e.target.value}))} placeholder="Last name" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input value={editTarget?.email || ''} disabled className="opacity-60 cursor-not-allowed" />
+              <p className="text-xs text-muted-foreground">Email cannot be changed here. Use password reset to update credentials.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Role</Label>
+                <Select
+                  value={editForm.role || 'STAFF'}
+                  onValueChange={v => setEditForm(f => ({...f, role: v}))}
+                  disabled={editTarget?.id === currentUserId}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ADMIN">Admin</SelectItem>
+                    <SelectItem value="STAFF">Staff</SelectItem>
+                    <SelectItem value="VIEWER">Viewer</SelectItem>
+                  </SelectContent>
+                </Select>
+                {editTarget?.id === currentUserId && (
+                  <p className="text-xs text-muted-foreground">You cannot change your own role.</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label>Status</Label>
+                <Select
+                  value={editForm.is_active ? 'active' : 'inactive'}
+                  onValueChange={v => setEditForm(f => ({...f, is_active: v === 'active'}))}
+                  disabled={editTarget?.id === currentUserId}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+                {editTarget?.id === currentUserId && (
+                  <p className="text-xs text-muted-foreground">You cannot deactivate your own account.</p>
+                )}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Start Date</Label>
+              <Input type="date" value={editForm.start_date || ''} onChange={e => setEditForm(f => ({...f, start_date: e.target.value}))} />
+            </div>
+            {/* Salary — ADMIN only (page is already ADMIN-restricted) */}
+            <div className="space-y-1.5">
+              <Label>Salary</Label>
+              <div className="flex gap-2">
+                <Select value={editForm.salary_currency || 'USD'} onValueChange={v => setEditForm(f => ({...f, salary_currency: v}))}>
+                  <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                  <SelectContent>{CURRENCIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                </Select>
+                <Input
+                  type="number"
+                  min="0"
+                  value={editForm.salary || ''}
+                  onChange={e => setEditForm(f => ({...f, salary: e.target.value}))}
+                  placeholder="Annual salary"
+                  className="flex-1"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">Salary is only visible to Admins.</p>
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <Button variant="outline" onClick={() => setEditTarget(null)}>Cancel</Button>
+              <Button onClick={handleEditSave} disabled={editSaving}>
+                {editSaving ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirm */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null) }}>
@@ -271,7 +405,7 @@ export default function UsersPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Invite User Modal */}
+      {/* Create User Modal */}
       <Dialog open={inviteOpen} onOpenChange={(open) => { if (!open) resetInviteForm(); else setInviteOpen(true) }}>
         <DialogContent className="max-w-md">
           <DialogHeader>

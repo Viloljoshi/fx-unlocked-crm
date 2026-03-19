@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { TrendingUp, Eye, EyeOff, ArrowLeft, CheckCircle2 } from 'lucide-react'
+import { Eye, EyeOff, ArrowLeft, CheckCircle2 } from 'lucide-react'
 
 export default function LoginPage() {
   const [mode, setMode] = useState('login') // 'login' | 'forgot'
@@ -88,11 +88,21 @@ export default function LoginPage() {
 
       {/* Brand mark above card */}
       <div className="flex flex-col items-center mb-7">
-        <div
-          className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-md mb-3"
-          style={{ background: 'linear-gradient(135deg, #16a34a 0%, #7c3aed 100%)' }}
-        >
-          <TrendingUp className="w-6 h-6 text-white" />
+        <div className="mb-3 drop-shadow-md">
+          <svg width="48" height="48" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="fxLoginGrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stopColor="#22d3ee" />
+                <stop offset="50%" stopColor="#3b82f6" />
+                <stop offset="100%" stopColor="#8b5cf6" />
+              </linearGradient>
+            </defs>
+            <path d="M16 2L28 9V23L16 30L4 23V9L16 2Z" fill="url(#fxLoginGrad)" />
+            <path d="M16 8L23 12.5V21.5L16 26L9 21.5V12.5L16 8Z" fill="white" opacity="0.2" />
+            <circle cx="16" cy="16" r="2.5" fill="white" opacity="0.95" />
+            <circle cx="10.5" cy="13" r="1.8" fill="white" opacity="0.65" />
+            <circle cx="21.5" cy="13" r="1.8" fill="white" opacity="0.65" />
+          </svg>
         </div>
         <h1 className="text-xl font-bold text-gray-900 tracking-tight">FX Unlocked</h1>
         <p className="text-sm text-gray-500 mt-0.5">CRM &amp; Operations Platform</p>
@@ -134,7 +144,7 @@ export default function LoginPage() {
                   <Input
                     type="email" value={email} onChange={e => setEmail(e.target.value)}
                     placeholder="you@company.com" required
-                    className="h-10 rounded-xl border-gray-200 bg-gray-50 focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-green-500/25 focus-visible:border-green-500 transition-colors"
+                    className="h-10 rounded-xl border-gray-200 bg-gray-50 focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-blue-500/25 focus-visible:border-blue-500 transition-colors"
                   />
                 </div>
                 <Button
@@ -168,7 +178,7 @@ export default function LoginPage() {
                 <Input
                   id="email" type="email" value={email} onChange={e => setEmail(e.target.value)}
                   placeholder="you@company.com" required autoComplete="email"
-                  className="h-10 rounded-xl border-gray-200 bg-gray-50 focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-green-500/25 focus-visible:border-green-500 transition-colors"
+                  className="h-10 rounded-xl border-gray-200 bg-gray-50 focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-blue-500/25 focus-visible:border-blue-500 transition-colors"
                 />
               </div>
 
@@ -177,7 +187,7 @@ export default function LoginPage() {
                   <Label htmlFor="password" className="text-sm font-medium text-gray-700">Password</Label>
                   <button
                     type="button" onClick={() => { setMode('forgot') }}
-                    className="text-xs font-medium text-green-600 hover:text-green-700 transition-colors"
+                    className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
                   >
                     Forgot password?
                   </button>
@@ -187,7 +197,7 @@ export default function LoginPage() {
                     id="password" type={showPassword ? 'text' : 'password'}
                     value={password} onChange={e => setPassword(e.target.value)}
                     placeholder="Enter your password" required minLength={6} autoComplete="current-password"
-                    className="h-10 rounded-xl border-gray-200 bg-gray-50 focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-green-500/25 focus-visible:border-green-500 transition-colors pr-10"
+                    className="h-10 rounded-xl border-gray-200 bg-gray-50 focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-blue-500/25 focus-visible:border-blue-500 transition-colors pr-10"
                   />
                   <button
                     type="button" onClick={() => setShowPassword(!showPassword)}

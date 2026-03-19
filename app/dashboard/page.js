@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Users, Building2, DollarSign, Clock, TrendingUp, AlertTriangle, ArrowUpRight, Plus, Settings, Trash2, LayoutDashboard, Calendar } from 'lucide-react'
+import { Users, Building2, DollarSign, Clock, TrendingUp, ArrowUpRight, Plus, Settings, Trash2, LayoutDashboard, Calendar, UserCheck } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -21,10 +21,10 @@ import { useUserRole } from '@/lib/hooks/useUserRole'
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 const WIDGET_DEFS = [
-  { id: 'overview_stats', label: 'Overview Stats', description: '6 key metric cards (affiliates, brokers, revenue)' },
+  { id: 'overview_stats', label: 'Overview Stats', description: 'Key metric cards (affiliates, brokers, revenue)' },
   { id: 'monthly_chart', label: 'Monthly Revenue Chart', description: 'Bar chart showing revenue by month' },
   { id: 'top_affiliates', label: 'Top Affiliates', description: 'Top 5 affiliates by total revenue' },
-  { id: 'renewal_alerts', label: 'Renewal Alerts', description: 'Affiliates with renewals in the next 30 days' },
+  { id: 'onboarding_affiliates', label: 'Affiliates/IBs in Onboarding', description: 'All affiliates/IBs currently in the Onboarding stage' },
   { id: 'upcoming_appointments', label: 'Upcoming Appointments', description: 'Next 5 scheduled appointments' },
 ]
 
@@ -32,7 +32,7 @@ const DEFAULT_DASHBOARD = {
   id: 'main',
   name: 'Main Dashboard',
   locked: true,
-  widgets: ['overview_stats', 'monthly_chart', 'top_affiliates', 'renewal_alerts', 'upcoming_appointments'],
+  widgets: ['overview_stats', 'monthly_chart', 'top_affiliates', 'onboarding_affiliates', 'upcoming_appointments'],
 }
 
 function useDashboards(userId) {
@@ -63,7 +63,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState({})
   const [chartData, setChartData] = useState([])
   const [topAffiliates, setTopAffiliates] = useState([])
-  const [renewalAlerts, setRenewalAlerts] = useState([])
+  const [onboardingAffiliates, setOnboardingAffiliates] = useState([])
   const [upcomingAppointments, setUpcomingAppointments] = useState([])
   const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString())
   const { userId, role, loading: roleLoading } = useUserRole()
@@ -161,13 +161,15 @@ export default function DashboardPage() {
           })
         setTopAffiliates(top)
 
-        const now = new Date()
-        const in30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
-        setRenewalAlerts(affiliates.filter(a => {
-          if (!a.renewal_date) return false
-          const rd = new Date(a.renewal_date)
-          return rd >= now && rd <= in30
-        }))
+        // Onboarding affiliates for widget — fetch with broker name
+        let onbQuery = supabase
+          .from('affiliates')
+          .select('id, name, email, deal_type, created_at, broker:brokers(name)')
+          .eq('status', 'ONBOARDING')
+          .order('created_at', { ascending: false })
+        if (!isAdmin) onbQuery = onbQuery.eq('manager_id', userId)
+        const onbRes = await onbQuery
+        setOnboardingAffiliates(onbRes.data || [])
 
         setUpcomingAppointments(appointments)
       } catch (err) {
@@ -222,17 +224,17 @@ export default function DashboardPage() {
     ? [
         { label: 'Total Affiliates', value: stats.totalAffiliates, sub: `${stats.activeAffiliates ?? 0} active`, icon: Users, iconColor: 'text-blue-500', bgColor: 'bg-blue-50' },
         { label: 'Total Brokers', value: stats.totalBrokers, sub: `${stats.activeBrokers ?? 0} active`, icon: Building2, iconColor: 'text-purple-500', bgColor: 'bg-purple-50' },
-        { label: 'Total Revenue', value: fmt(stats.totalRevenue), sub: 'All time', icon: DollarSign, iconColor: 'text-green-500', bgColor: 'bg-green-50' },
+        { label: 'Total Revenue', value: fmt(stats.totalRevenue), sub: 'All time', icon: DollarSign, iconColor: 'text-blue-500', bgColor: 'bg-blue-50' },
         { label: 'Pending Revenue', value: fmt(stats.pendingRevenue), sub: 'Pending & Awaited', icon: Clock, iconColor: 'text-yellow-500', bgColor: 'bg-yellow-50' },
         { label: 'Paid Revenue', value: fmt(stats.paidRevenue), sub: 'Confirmed', icon: TrendingUp, iconColor: 'text-green-500', bgColor: 'bg-green-50' },
-        { label: 'Renewal Alerts', value: renewalAlerts.length, sub: 'Next 30 days', icon: AlertTriangle, iconColor: 'text-orange-500', bgColor: 'bg-orange-50' },
+        { label: 'In Onboarding', value: onboardingAffiliates.length, sub: 'Affiliates/IBs', icon: UserCheck, iconColor: 'text-blue-500', bgColor: 'bg-blue-50' },
       ]
     : [
         { label: 'My Affiliates', value: stats.totalAffiliates, sub: `${stats.activeAffiliates ?? 0} active`, icon: Users, iconColor: 'text-blue-500', bgColor: 'bg-blue-50' },
-        { label: 'My Revenue', value: fmt(stats.totalRevenue), sub: 'All time', icon: DollarSign, iconColor: 'text-green-500', bgColor: 'bg-green-50' },
+        { label: 'My Revenue', value: fmt(stats.totalRevenue), sub: 'All time', icon: DollarSign, iconColor: 'text-blue-500', bgColor: 'bg-blue-50' },
         { label: 'Pending Revenue', value: fmt(stats.pendingRevenue), sub: 'Pending & Awaited', icon: Clock, iconColor: 'text-yellow-500', bgColor: 'bg-yellow-50' },
         { label: 'Paid Revenue', value: fmt(stats.paidRevenue), sub: 'Confirmed', icon: TrendingUp, iconColor: 'text-green-500', bgColor: 'bg-green-50' },
-        { label: 'My Renewals', value: renewalAlerts.length, sub: 'Next 30 days', icon: AlertTriangle, iconColor: 'text-orange-500', bgColor: 'bg-orange-50' },
+        { label: 'In Onboarding', value: onboardingAffiliates.length, sub: 'Affiliates/IBs', icon: UserCheck, iconColor: 'text-blue-500', bgColor: 'bg-blue-50' },
       ]
 
   if (loading) {
@@ -374,25 +376,36 @@ export default function DashboardPage() {
           </Card>
         )}
 
-        {/* Renewal Alerts */}
-        {show('renewal_alerts') && (
+        {/* Affiliates/IBs in Onboarding */}
+        {show('onboarding_affiliates') && (
           <Card>
             <CardHeader className="flex-row items-center justify-between pb-2">
               <CardTitle className="text-base flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-orange-500" /> Renewal Alerts
+                <UserCheck className="w-4 h-4 text-blue-500" /> Affiliates/IBs in Onboarding
               </CardTitle>
+              <Link href="/dashboard/affiliates?status=ONBOARDING">
+                <Button variant="ghost" size="sm" className="h-7 text-xs">View all <ArrowUpRight className="w-3 h-3 ml-1" /></Button>
+              </Link>
             </CardHeader>
             <CardContent>
-              {renewalAlerts.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-6 text-center">No upcoming renewals in the next 30 days.</p>
+              {onboardingAffiliates.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-6 text-center">No affiliates/IBs currently in onboarding.</p>
               ) : (
                 <div className="space-y-2">
-                  {renewalAlerts.map(a => (
+                  {onboardingAffiliates.slice(0, 5).map(a => (
                     <div key={a.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                      <p className="font-medium text-sm">{a.name}</p>
-                      <Badge className="bg-orange-50 text-orange-700 border-orange-200 text-xs">
-                        {new Date(a.renewal_date).toLocaleDateString()}
-                      </Badge>
+                      <div>
+                        <p className="font-medium text-sm">{a.name}</p>
+                        <p className="text-xs text-muted-foreground">{a.broker?.name || '—'}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {a.deal_type && (
+                          <Badge variant="outline" className="text-xs">{a.deal_type}</Badge>
+                        )}
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(a.created_at).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -403,7 +416,7 @@ export default function DashboardPage() {
 
         {/* Upcoming Appointments */}
         {show('upcoming_appointments') && (
-          <Card className={!show('top_affiliates') && !show('renewal_alerts') ? 'lg:col-span-2' : ''}>
+          <Card className={!show('top_affiliates') && !show('onboarding_affiliates') ? 'lg:col-span-2' : ''}>
             <CardHeader className="flex-row items-center justify-between pb-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-blue-500" /> Upcoming Appointments
@@ -436,7 +449,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Empty state if no widgets selected */}
-      {!show('overview_stats') && !show('monthly_chart') && !show('top_affiliates') && !show('renewal_alerts') && !show('upcoming_appointments') && (
+      {!show('overview_stats') && !show('monthly_chart') && !show('top_affiliates') && !show('onboarding_affiliates') && !show('upcoming_appointments') && (
         <div className="text-center py-20 text-muted-foreground space-y-3">
           <LayoutDashboard className="w-12 h-12 mx-auto opacity-20" />
           <p className="font-medium">No widgets selected for this dashboard</p>

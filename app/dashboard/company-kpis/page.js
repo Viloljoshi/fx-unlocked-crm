@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Progress } from '@/components/ui/progress'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { BarChart3, Plus, Target, TrendingUp, Download } from 'lucide-react'
+import { BarChart3, Plus, Target, TrendingUp, Download, Users } from 'lucide-react'
 
 const MONTHS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -24,6 +23,11 @@ const EMPTY_FORM = {
   target_revenue: '',
   target_affiliates: '',
   target_commissions: '',
+}
+
+function AchievementPct({ pct }) {
+  const colour = pct >= 80 ? 'text-green-600' : pct >= 50 ? 'text-yellow-500' : 'text-red-500'
+  return <span className={`text-2xl font-outfit font-bold ${colour}`}>{pct}%</span>
 }
 
 export default function CompanyKPIsPage() {
@@ -59,14 +63,22 @@ export default function CompanyKPIsPage() {
     setLoading(false)
   }
 
-  // Calculate actuals from commissions for each month
-  const getActualRevenue = (month) => {
-    return commissions
-      .filter(c => c.month === month)
-      .reduce((s, c) => s + Number(c.revenue_amount || 0), 0)
+  // Actual revenue from commissions for a given month
+  const getActualRevenue = (month) =>
+    commissions.filter(c => c.month === month).reduce((s, c) => s + Number(c.revenue_amount || 0), 0)
+
+  // Count affiliates created in a given month of the selected year
+  const getActualAffiliatesForMonth = (month) => {
+    const yr = parseInt(yearFilter)
+    return affiliates.filter(a => {
+      if (!a.created_at) return false
+      const d = new Date(a.created_at)
+      return d.getFullYear() === yr && d.getMonth() + 1 === month
+    }).length
   }
 
-  const getActualAffiliates = () => {
+  // Count affiliates created in the selected year (for summary card)
+  const getActualAffiliatesForYear = () => {
     const yr = parseInt(yearFilter)
     return affiliates.filter(a => {
       if (!a.created_at) return false
@@ -77,7 +89,6 @@ export default function CompanyKPIsPage() {
   const handleSave = async () => {
     if (!form.month || !form.year) { toast.error('Month and year are required'); return }
     setSaving(true)
-    // Check if KPI already exists for this month/year
     const existing = kpis.find(k => k.month === parseInt(form.month) && k.year === parseInt(form.year))
     const payload = {
       month: parseInt(form.month),
@@ -101,11 +112,13 @@ export default function CompanyKPIsPage() {
   }
 
   const exportCSV = () => {
-    const headers = ['Month', 'Year', 'Target Revenue', 'Actual Revenue', 'Progress %', 'Target Affiliates', 'Target Commissions']
+    const headers = ['Month', 'Year', 'Target Revenue', 'Actual Revenue', 'Revenue Progress %', 'New Affiliates/IBs Target', 'Actual Affiliates/IBs', 'Affiliate Progress %']
     const rows = kpis.map(k => {
       const actual = getActualRevenue(k.month)
-      const pct = k.target_revenue ? Math.round((actual / k.target_revenue) * 100) : 0
-      return [MONTHS[k.month], k.year, k.target_revenue || 0, actual, `${pct}%`, k.target_affiliates || 0, k.target_commissions || 0]
+      const revPct = k.target_revenue ? Math.round((actual / k.target_revenue) * 100) : 0
+      const affActual = getActualAffiliatesForMonth(k.month)
+      const affPct = k.target_affiliates ? Math.round((affActual / k.target_affiliates) * 100) : 0
+      return [MONTHS[k.month], k.year, k.target_revenue || 0, actual, `${revPct}%`, k.target_affiliates || 0, affActual, `${affPct}%`]
     })
     const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -117,7 +130,10 @@ export default function CompanyKPIsPage() {
   const isAdmin = profile?.role === 'ADMIN'
   const totalTarget = kpis.reduce((s, k) => s + Number(k.target_revenue || 0), 0)
   const totalActual = commissions.reduce((s, c) => s + Number(c.revenue_amount || 0), 0)
-  const overallProgress = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : 0
+  const revenueAchievement = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : 0
+  const totalAffiliatesTarget = kpis.reduce((s, k) => s + Number(k.target_affiliates || 0), 0)
+  const totalAffiliatesActual = getActualAffiliatesForYear()
+  const affiliateAchievement = totalAffiliatesTarget > 0 ? Math.round((totalAffiliatesActual / totalAffiliatesTarget) * 100) : 0
 
   if (loading) return <div className="space-y-3">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
 
@@ -126,11 +142,11 @@ export default function CompanyKPIsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-outfit font-bold">Company KPIs</h1>
-          <p className="text-sm text-muted-foreground">Monthly targets vs actuals for {yearFilter}</p>
+          <p className="text-sm text-muted-foreground">Track monthly KPI targets for revenue and new affiliates</p>
         </div>
         <div className="flex items-center gap-2">
           <Select value={yearFilter} onValueChange={setYearFilter}>
-            <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-24 rounded-lg border"><SelectValue /></SelectTrigger>
             <SelectContent>{[2023,2024,2025,2026].map(y => <SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}</SelectContent>
           </Select>
           <Button variant="outline" size="sm" onClick={exportCSV}>
@@ -138,37 +154,46 @@ export default function CompanyKPIsPage() {
           </Button>
           {isAdmin && (
             <Button size="sm" onClick={() => setAddOpen(true)}>
-              <Plus className="w-4 h-4 mr-1" /> Set Target
+              <Plus className="w-4 h-4 mr-1" /> Add Year
             </Button>
           )}
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* 4 Summary Cards — matching screenshot */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-              <Target className="w-4 h-4" /> Annual Target
-            </div>
-            <p className="text-2xl font-outfit font-bold">${totalTarget.toLocaleString()}</p>
+          <CardContent className="pt-5 pb-5">
+            <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1.5">
+              <Target className="w-4 h-4" /> Annual Revenue Target
+            </p>
+            <p className="text-2xl font-outfit font-bold">${totalTarget.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+            <p className="text-xs text-muted-foreground mt-1">Actual: ${totalActual.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-              <TrendingUp className="w-4 h-4" /> Actual Revenue
-            </div>
-            <p className="text-2xl font-outfit font-bold text-green-600">${totalActual.toLocaleString()}</p>
+          <CardContent className="pt-5 pb-5">
+            <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1.5">
+              <TrendingUp className="w-4 h-4" /> Revenue Achievement
+            </p>
+            <AchievementPct pct={revenueAchievement} />
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-              <BarChart3 className="w-4 h-4" /> Overall Progress
-            </div>
-            <p className="text-2xl font-outfit font-bold">{overallProgress}%</p>
-            <Progress value={Math.min(overallProgress, 100)} className="h-1.5 mt-2" />
+          <CardContent className="pt-5 pb-5">
+            <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1.5">
+              <Users className="w-4 h-4" /> New Affiliates Target
+            </p>
+            <p className="text-2xl font-outfit font-bold">{totalAffiliatesTarget}</p>
+            <p className="text-xs text-muted-foreground mt-1">Actual: {totalAffiliatesActual}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5 pb-5">
+            <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1.5">
+              <BarChart3 className="w-4 h-4" /> Affiliate Achievement
+            </p>
+            <AchievementPct pct={affiliateAchievement} />
           </CardContent>
         </Card>
       </div>
@@ -179,7 +204,7 @@ export default function CompanyKPIsPage() {
             <div className="text-center py-12 text-muted-foreground">
               <BarChart3 className="w-10 h-10 mx-auto mb-3 opacity-30" />
               <p className="font-medium">No KPI targets set for {yearFilter}</p>
-              <p className="text-sm mt-1">Click &ldquo;Set Target&rdquo; to define monthly revenue targets</p>
+              <p className="text-sm mt-1">Click &ldquo;Add Year&rdquo; to define monthly targets</p>
             </div>
           ) : (
             <div className="rounded-lg border overflow-hidden">
@@ -187,12 +212,12 @@ export default function CompanyKPIsPage() {
                 <TableHeader>
                   <TableRow className="bg-muted/50">
                     <TableHead>Month</TableHead>
-                    <TableHead>Revenue Target</TableHead>
-                    <TableHead>Revenue Actual</TableHead>
+                    <TableHead>Target Revenue</TableHead>
+                    <TableHead>Actual Revenue</TableHead>
                     <TableHead>Progress</TableHead>
-                    <TableHead>Variance</TableHead>
-                    <TableHead>Target Affiliates</TableHead>
-                    <TableHead>Target Commissions</TableHead>
+                    <TableHead>New Affiliates/IBs</TableHead>
+                    <TableHead>Actual Affiliates/IBs</TableHead>
+                    <TableHead>Progress</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -200,7 +225,9 @@ export default function CompanyKPIsPage() {
                     const actual = getActualRevenue(k.month)
                     const target = Number(k.target_revenue || 0)
                     const revProg = target > 0 ? Math.round((actual / target) * 100) : 0
-                    const variance = actual - target
+                    const affTarget = Number(k.target_affiliates || 0)
+                    const affActual = getActualAffiliatesForMonth(k.month)
+                    const affProg = affTarget > 0 ? Math.round((affActual / affTarget) * 100) : 0
                     return (
                       <TableRow key={k.id} className="hover:bg-muted/30">
                         <TableCell className="font-medium">{MONTHS[k.month]}</TableCell>
@@ -208,21 +235,28 @@ export default function CompanyKPIsPage() {
                         <TableCell className="text-green-600 font-medium">${actual.toLocaleString()}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <Progress value={Math.min(revProg, 100)} className="h-2 w-24" />
+                            <Progress value={Math.min(revProg, 100)} className="h-2 w-20" />
                             <span className={`text-xs font-medium ${
                               revProg >= 100 ? 'text-green-600' : revProg >= 80 ? 'text-yellow-600' : 'text-red-500'
                             }`}>{revProg}%</span>
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <span className={`text-sm font-medium ${
-                            variance >= 0 ? 'text-green-600' : 'text-red-500'
-                          }`}>
-                            {variance >= 0 ? '+' : ''}${variance.toLocaleString()}
-                          </span>
+                        <TableCell className="text-muted-foreground">
+                          {affTarget > 0 ? affTarget : <span className="text-xs italic opacity-60">Not set</span>}
                         </TableCell>
-                        <TableCell className="text-muted-foreground">{k.target_affiliates != null ? k.target_affiliates : <span className="text-xs italic opacity-60">Not set</span>}</TableCell>
-                        <TableCell className="text-muted-foreground">{k.target_commissions != null ? k.target_commissions : <span className="text-xs italic opacity-60">Not set</span>}</TableCell>
+                        <TableCell className="font-medium">{affActual}</TableCell>
+                        <TableCell>
+                          {affTarget > 0 ? (
+                            <div className="flex items-center gap-2">
+                              <Progress value={Math.min(affProg, 100)} className="h-2 w-20" />
+                              <span className={`text-xs font-medium ${
+                                affProg >= 100 ? 'text-green-600' : affProg >= 50 ? 'text-yellow-600' : 'text-red-500'
+                              }`}>{affProg}%</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
                       </TableRow>
                     )
                   })}
@@ -257,20 +291,14 @@ export default function CompanyKPIsPage() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Revenue Target ($)</Label>
+              <Label>Target Revenue ($)</Label>
               <Input value={form.target_revenue} onChange={e => setForm(f => ({...f, target_revenue: e.target.value}))} placeholder="e.g. 50000" type="number" min="0" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Target Affiliates</Label>
-                <Input value={form.target_affiliates} onChange={e => setForm(f => ({...f, target_affiliates: e.target.value}))} placeholder="e.g. 10" type="number" min="0" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Target Commissions</Label>
-                <Input value={form.target_commissions} onChange={e => setForm(f => ({...f, target_commissions: e.target.value}))} placeholder="e.g. 20" type="number" min="0" />
-              </div>
+            <div className="space-y-1.5">
+              <Label>New Affiliates/IBs Target</Label>
+              <Input value={form.target_affiliates} onChange={e => setForm(f => ({...f, target_affiliates: e.target.value}))} placeholder="e.g. 5" type="number" min="0" />
             </div>
-            <p className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">Actual revenue is automatically calculated from commission records. If a target already exists for this month/year, it will be updated.</p>
+            <p className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">Actual revenue is calculated from commission records. Actual affiliates/IBs counts new sign-ups that month. If a target exists for this month/year, it will be updated.</p>
             <div className="flex gap-2 justify-end pt-2">
               <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
               <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Target'}</Button>

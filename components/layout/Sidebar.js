@@ -4,14 +4,15 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, Building2, DollarSign, UserCog, Shield,
-  BarChart3, ScrollText, TrendingUp, MessageSquare, Settings, X, ChevronLeft, ChevronRight, Calendar, LineChart
+  BarChart3, ScrollText, TrendingUp, MessageSquare, Settings, X, ChevronLeft, ChevronRight, Calendar, LineChart, PieChart
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Affiliates', href: '/dashboard/affiliates', icon: Users },
+  { name: 'Affiliates/IBs', href: '/dashboard/affiliates', icon: Users },
+  { name: 'Affiliate Dashboard', href: '/dashboard/affiliates-dashboard', icon: PieChart },
   { name: 'Brokers', href: '/dashboard/brokers', icon: Building2 },
   { name: 'Revenue', href: '/dashboard/revenue', icon: DollarSign },
   { name: 'Appointments', href: '/dashboard/appointments', icon: Calendar },
@@ -31,6 +32,29 @@ const personalItems = [
   { name: 'AI Chat', href: '/dashboard/ai-chat', icon: MessageSquare },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]
+
+// FX Unlocked hexagon logo — cyan → blue → purple gradient matching brand
+function FXLogo({ size = 32 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="fxGrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#22d3ee" />
+          <stop offset="50%" stopColor="#3b82f6" />
+          <stop offset="100%" stopColor="#8b5cf6" />
+        </linearGradient>
+      </defs>
+      {/* Outer hexagon */}
+      <path d="M16 2L28 9V23L16 30L4 23V9L16 2Z" fill="url(#fxGrad)" />
+      {/* Inner hexagon (hollow look) */}
+      <path d="M16 8L23 12.5V21.5L16 26L9 21.5V12.5L16 8Z" fill="white" opacity="0.2" />
+      {/* Centre dot + connector dots to match FX Unlocked icon style */}
+      <circle cx="16" cy="16" r="2.5" fill="white" opacity="0.95" />
+      <circle cx="10.5" cy="13" r="1.8" fill="white" opacity="0.65" />
+      <circle cx="21.5" cy="13" r="1.8" fill="white" opacity="0.65" />
+    </svg>
+  )
+}
 
 export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen, userRole }) {
   const pathname = usePathname()
@@ -62,16 +86,14 @@ export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobile
     <div className="flex flex-col h-full">
       <div className="p-4 flex items-center justify-between border-b border-border/50">
         {!collapsed && (
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
-              <TrendingUp className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-outfit font-bold text-lg">FX Unlocked</span>
+          <div className="flex items-center gap-2.5">
+            <FXLogo size={32} />
+            <span className="font-outfit font-bold text-lg tracking-tight">FX Unlocked</span>
           </div>
         )}
         {collapsed && (
-          <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center mx-auto">
-            <TrendingUp className="w-4 h-4 text-white" />
+          <div className="mx-auto">
+            <FXLogo size={32} />
           </div>
         )}
         <Button

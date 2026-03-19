@@ -15,7 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { ArrowLeft, Mail, Phone, Globe, MapPin, Calendar, Edit2, Save, X, ChevronDown, Plus, Users } from 'lucide-react'
+import { ArrowLeft, Mail, Phone, Globe, MapPin, Calendar, Edit2, Save, X, ChevronDown, Plus, Users, StickyNote } from 'lucide-react'
 import Link from 'next/link'
 import { useUserRole } from '@/lib/hooks/useUserRole'
 import DealTypeFields from '@/components/deal-type-fields/DealTypeFields'
@@ -92,10 +92,12 @@ const STATUS_COLORS = {
   INACTIVE: 'bg-red-50 text-red-700 border-red-200',
 }
 
+const NOTE_TYPES = ['GENERAL', 'CALL', 'MEETING', 'EMAIL']
+
 export default function AffiliateDetailPage() {
   const { id } = useParams()
   const router = useRouter()
-  const { role } = useUserRole()
+  const { role, userId } = useUserRole()
   const canWrite = role === 'ADMIN' || role === 'STAFF'
   const [affiliate, setAffiliate] = useState(null)
   const [broker, setBroker] = useState(null)
@@ -115,6 +117,11 @@ export default function AffiliateDetailPage() {
   const [editDealData, setEditDealData] = useState({})
   const [dealNotes, setDealNotes] = useState('')
   const [saving, setSaving] = useState(false)
+  // Add Note state
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false)
+  const [noteType, setNoteType] = useState('GENERAL')
+  const [noteContent, setNoteContent] = useState('')
+  const [noteSaving, setNoteSaving] = useState(false)
   const supabase = createClient()
 
   useEffect(() => { load() }, [id])
@@ -220,6 +227,33 @@ export default function AffiliateDetailPage() {
     setAffiliate(prev => ({ ...prev, deal_details: updated }))
   }
 
+  const handleAddNote = async () => {
+    if (!noteContent.trim() || noteContent.trim().length < 3) {
+      toast.error('Note must be at least 3 characters')
+      return
+    }
+    setNoteSaving(true)
+    const { error } = await supabase.from('affiliate_notes').insert({
+      affiliate_id: id,
+      user_id: userId,
+      note_type: noteType,
+      content: noteContent.trim(),
+    })
+    if (error) {
+      toast.error('Failed to save note: ' + error.message)
+      setNoteSaving(false)
+      return
+    }
+    toast.success('Note added')
+    setNoteContent('')
+    setNoteType('GENERAL')
+    setNoteDialogOpen(false)
+    setNoteSaving(false)
+    // Refresh notes list
+    const { data } = await supabase.from('affiliate_notes').select('*').eq('affiliate_id', id).order('created_at', { ascending: false })
+    setNotes(data || [])
+  }
+
   if (loading) return <div className="space-y-4">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>
   if (!affiliate) return (
     <div className="text-center py-20 text-muted-foreground space-y-4">
@@ -231,6 +265,7 @@ export default function AffiliateDetailPage() {
   )
 
   const totalRevenue = commissions.reduce((s, c) => s + Number(c.revenue_amount || 0), 0)
+  const hasDealFields = affiliate.deal_type && affiliate.deal_details?.deal
 
   return (
     <div className="space-y-5">
@@ -251,7 +286,6 @@ export default function AffiliateDetailPage() {
         </div>
         {canWrite && (
           <Button variant="outline" size="sm" onClick={() => {
-            // Reset form state from current affiliate data to avoid stale state after cancel
             setEditForm({
               ...affiliate,
               broker_id: affiliate.broker_id || 'none',
@@ -296,8 +330,9 @@ export default function AffiliateDetailPage() {
         </Card>
       </div>
 
-      {/* Details + Revenue */}
+      {/* Details + Revenue + Deal Terms */}
       <div className="grid lg:grid-cols-3 gap-5">
+        {/* Left: Details (no deal-type fields) */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3"><CardTitle className="text-base">Details</CardTitle></CardHeader>
           <CardContent className="grid sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
@@ -310,32 +345,55 @@ export default function AffiliateDetailPage() {
             <div><span className="text-muted-foreground block text-xs">Renewal Date</span><p className="font-medium">{affiliate.renewal_date ? new Date(affiliate.renewal_date).toLocaleDateString() : '-'}</p></div>
             {affiliate.deal_terms && <div className="sm:col-span-2"><span className="text-muted-foreground block text-xs">Deal Terms</span><p className="font-medium mt-0.5">{affiliate.deal_terms}</p></div>}
             {affiliate.notes && <div className="sm:col-span-2"><span className="text-muted-foreground block text-xs">Notes</span><p className="font-medium mt-0.5">{affiliate.notes}</p></div>}
-            {/* Read-only deal-type-specific fields */}
-            {affiliate.deal_type && affiliate.deal_details?.deal && (
-              <div className="sm:col-span-2">
-                <DealTypeFields dealType={affiliate.deal_type} dealData={affiliate.deal_details.deal} readOnly />
+          </CardContent>
+        </Card>
+
+        {/* Right: Revenue + Deal Terms stacked */}
+        <div className="flex flex-col gap-4">
+          <Card>
+            <CardHeader className="pb-3"><CardTitle className="text-base">Revenue</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <p className="text-muted-foreground text-xs">Total Revenue</p>
+                <p className="text-2xl font-outfit font-bold text-green-600">${totalRevenue.toLocaleString()}</p>
               </div>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-base">Revenue</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-muted-foreground text-xs">Total Revenue</p>
-              <p className="text-2xl font-outfit font-bold text-green-600">${totalRevenue.toLocaleString()}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground text-xs">Total Commissions</p>
-              <p className="text-lg font-semibold">{commissions.length}</p>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {affiliate.instagram && <Badge variant="outline" className="text-xs">Instagram</Badge>}
-              {affiliate.telegram && <Badge variant="outline" className="text-xs">Telegram</Badge>}
-              {affiliate.x_handle && <Badge variant="outline" className="text-xs">X/Twitter</Badge>}
-            </div>
-          </CardContent>
-        </Card>
+              <div>
+                <p className="text-muted-foreground text-xs">Total Commissions</p>
+                <p className="text-lg font-semibold">{commissions.length}</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {affiliate.instagram && <Badge variant="outline" className="text-xs">Instagram</Badge>}
+                {affiliate.telegram && <Badge variant="outline" className="text-xs">Telegram</Badge>}
+                {affiliate.x_handle && <Badge variant="outline" className="text-xs">X/Twitter</Badge>}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Deal Terms card */}
+          {affiliate.deal_type && (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Deal Terms</CardTitle>
+                  <Badge variant="outline" className="text-xs font-semibold">{affiliate.deal_type}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="text-sm space-y-2">
+                {hasDealFields ? (
+                  <DealTypeFields dealType={affiliate.deal_type} dealData={affiliate.deal_details.deal} readOnly />
+                ) : (
+                  <p className="text-muted-foreground text-xs">No deal fields configured yet.</p>
+                )}
+                {affiliate.deal_details?.notes && (
+                  <div className="pt-2 border-t">
+                    <p className="text-muted-foreground text-xs mb-1">Deal Notes</p>
+                    <p className="text-sm">{affiliate.deal_details.notes}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
 
       {/* Sub-Affiliates */}
@@ -374,18 +432,32 @@ export default function AffiliateDetailPage() {
 
         <TabsContent value="notes">
           <Card>
-            <CardContent className="pt-4">
+            <CardHeader className="flex-row items-center justify-between pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <StickyNote className="w-4 h-4" /> Notes
+              </CardTitle>
+              {canWrite && (
+                <Button size="sm" onClick={() => { setNoteContent(''); setNoteType('GENERAL'); setNoteDialogOpen(true) }}>
+                  <Plus className="w-4 h-4 mr-1" /> Add Note
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent className="pt-0">
               {notes.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  <p className="text-sm">No notes yet. Use the Cmd+K bar and type @note to add one.</p>
+                  <StickyNote className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">No notes yet.</p>
+                  {canWrite && <p className="text-xs mt-1">Click &ldquo;Add Note&rdquo; above or use Cmd+K → @note</p>}
                 </div>
               ) : (
                 <div className="space-y-2">
                   {notes.map(n => (
                     <div key={n.id} className="p-3 rounded-lg bg-muted/30 border">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1.5">
                         <Badge variant="outline" className="text-xs">{n.note_type || 'GENERAL'}</Badge>
-                        <span className="text-xs text-muted-foreground">{new Date(n.created_at).toLocaleString()}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(n.created_at).toLocaleString('en', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
                       </div>
                       <p className="text-sm">{n.content}</p>
                     </div>
@@ -479,6 +551,56 @@ export default function AffiliateDetailPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Add Note Dialog */}
+      <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <StickyNote className="w-4 h-4" /> Add Note
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label>Note Type</Label>
+              <Select value={noteType} onValueChange={setNoteType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {NOTE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Note <span className="text-destructive">*</span></Label>
+              <Textarea
+                value={noteContent}
+                onChange={e => setNoteContent(e.target.value)}
+                placeholder="Write your note here..."
+                className="min-h-[120px]"
+                autoFocus
+              />
+              {noteContent.trim().length > 0 && noteContent.trim().length < 3 && (
+                <p className="text-xs text-destructive">Note must be at least 3 characters</p>
+              )}
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <Button variant="outline" onClick={() => setNoteDialogOpen(false)} disabled={noteSaving}>Cancel</Button>
+              <Button onClick={handleAddNote} disabled={noteSaving || noteContent.trim().length < 3}>
+                {noteSaving ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Saving...
+                  </span>
+                ) : (
+                  <><Plus className="w-4 h-4 mr-1" /> Add Note</>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Affiliate Modal */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
