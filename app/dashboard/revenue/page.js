@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,10 +14,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
-import { DollarSign, Plus, Download, Trash2, Pencil, Check } from 'lucide-react'
+import { DollarSign, Plus, Download, Trash2, Pencil, Check, Clock, TrendingUp } from 'lucide-react'
 import { useUserRole } from '@/lib/hooks/useUserRole'
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
+} from 'recharts'
 
 const MONTHS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const DEAL_TYPES = ['CPA','PNL','HYBRID','REBATES']
+const DEAL_TYPE_COLORS = { CPA: '#93c5fd', PNL: '#c4b5fd', HYBRID: '#86efac', REBATES: '#fde68a' }
 const EMPTY_FORM = { affiliate_id: '', broker_id: 'none', month: new Date().getMonth()+1, year: new Date().getFullYear(), deal_type: 'CPA', revenue_amount: '', notes: '', status: 'PENDING' }
 
 export default function RevenuePage() {
@@ -31,7 +36,7 @@ export default function RevenuePage() {
   const [affiliateFilter, setAffiliateFilter] = useState('all')
   const [addOpen, setAddOpen] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
-  const [form, setForm] = useState({ affiliate_id: '', broker_id: 'none', month: new Date().getMonth()+1, year: new Date().getFullYear(), deal_type: 'CPA', revenue_amount: '', notes: '' })
+  const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [selected, setSelected] = useState(new Set())
   const [deleteConfirm, setDeleteConfirm] = useState(false)
@@ -47,7 +52,6 @@ export default function RevenuePage() {
 
   const load = async () => {
     setLoading(true)
-    // Staff: only see commissions for their affiliates; admin sees all
     let affQuery = supabase.from('affiliates').select('id, name')
     if (role !== 'ADMIN') affQuery = affQuery.eq('manager_id', userId)
 
@@ -85,6 +89,13 @@ export default function RevenuePage() {
   const totalAmount = filtered.reduce((s,c) => s+Number(c.revenue_amount||0), 0)
   const pendingAmount = filtered.filter(c=>c.status==='PENDING'||c.status==='AWAITED').reduce((s,c) => s+Number(c.revenue_amount||0), 0)
   const paidAmount = filtered.filter(c=>c.status==='PAID').reduce((s,c) => s+Number(c.revenue_amount||0), 0)
+
+  // Revenue by Deal Type (from filtered commissions)
+  const dealTypeData = DEAL_TYPES.map(dt => ({
+    name: dt,
+    total: filtered.filter(c => c.deal_type === dt).reduce((s, c) => s + Number(c.revenue_amount || 0), 0),
+    colour: DEAL_TYPE_COLORS[dt],
+  })).filter(d => d.total > 0)
 
   const openAdd = () => { setEditTarget(null); setForm(EMPTY_FORM); setAddOpen(true) }
   const openEdit = (c, e) => {
@@ -139,26 +150,109 @@ export default function RevenuePage() {
     const a = document.createElement('a'); a.href=url; a.download='revenue.csv'; a.click(); URL.revokeObjectURL(url)
   }
 
+  const fmt = (n) => `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0 })}`
+
   if (loading) return <div className="space-y-3">{[...Array(5)].map((_,i)=><Skeleton key={i} className="h-12 rounded-lg" />)}</div>
 
   return (
     <div className="space-y-5">
+      {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-outfit font-bold">Revenue & Commissions</h1>
-          <p className="text-sm text-muted-foreground">
-            Total: <span className="font-medium text-foreground">${totalAmount.toLocaleString()}</span> &bull;
-            Paid: <span className="text-green-600 font-medium">${paidAmount.toLocaleString()}</span> &bull;
-            Pending: <span className="text-yellow-600 font-medium">${pendingAmount.toLocaleString()}</span>
-          </p>
+          <p className="text-sm text-muted-foreground">Track and manage commission records</p>
         </div>
         <div className="flex items-center gap-2">
-          {canWrite && selected.size > 0 && <Button variant="destructive" size="sm" onClick={()=>setDeleteConfirm(true)}><Trash2 className="w-4 h-4 mr-1" /> Delete {selected.size}</Button>}
+          {canWrite && selected.size > 0 && (
+            <Button variant="destructive" size="sm" onClick={() => setDeleteConfirm(true)}>
+              <Trash2 className="w-4 h-4 mr-1" /> Delete {selected.size}
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={exportCSV}><Download className="w-4 h-4 mr-1" /> Export CSV</Button>
           {canWrite && <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-1" /> Add Commission</Button>}
         </div>
       </div>
 
+      {/* 3 Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="pt-4 pb-4 px-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                <DollarSign className="w-4 h-4 text-blue-500" />
+              </div>
+            </div>
+            <p className="text-2xl font-outfit font-bold">{fmt(totalAmount)}</p>
+            <p className="text-xs font-medium text-foreground mt-0.5">Total Revenue</p>
+            <p className="text-xs text-muted-foreground">{filtered.length} commission{filtered.length !== 1 ? 's' : ''}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-4 px-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center">
+                <TrendingUp className="w-4 h-4 text-green-500" />
+              </div>
+            </div>
+            <p className="text-2xl font-outfit font-bold text-green-600">{fmt(paidAmount)}</p>
+            <p className="text-xs font-medium text-foreground mt-0.5">Total Paid</p>
+            <p className="text-xs text-muted-foreground">Confirmed payments</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-4 px-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-yellow-50 flex items-center justify-center">
+                <Clock className="w-4 h-4 text-yellow-500" />
+              </div>
+            </div>
+            <p className="text-2xl font-outfit font-bold text-yellow-600">{fmt(pendingAmount)}</p>
+            <p className="text-xs font-medium text-foreground mt-0.5">Total Pending</p>
+            <p className="text-xs text-muted-foreground">Pending & Awaited</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Revenue by Deal Type Chart */}
+      {dealTypeData.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Revenue by Deal Type</CardTitle>
+            <p className="text-xs text-muted-foreground">Based on current filters</p>
+          </CardHeader>
+          <CardContent>
+            <div className="h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dealTypeData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `$${v >= 1000 ? (v/1000).toFixed(0)+'k' : v}`} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }}
+                    formatter={(val) => [`$${Number(val).toLocaleString()}`, 'Revenue']}
+                  />
+                  <Bar dataKey="total" radius={[6, 6, 0, 0]} name="Revenue">
+                    {dealTypeData.map((d, i) => <Cell key={i} fill={d.colour} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            {/* Summary breakdown */}
+            <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t">
+              {dealTypeData.map(d => (
+                <div key={d.name} className="flex items-center gap-2 text-sm">
+                  <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: d.colour }} />
+                  <span className="text-muted-foreground">{d.name}</span>
+                  <span className="font-medium">${d.total.toLocaleString()}</span>
+                  <span className="text-xs text-muted-foreground">({totalAmount > 0 ? Math.round((d.total/totalAmount)*100) : 0}%)</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Filters + Commission Table */}
       <Card>
         <CardContent className="pt-4">
           <div className="flex flex-wrap gap-2 mb-4">
@@ -217,7 +311,7 @@ export default function RevenuePage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>Month</Label><Select value={form.month.toString()} onValueChange={v=>setForm(f=>({...f,month:parseInt(v)}))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{MONTHS.slice(1).map((m,i)=><SelectItem key={i+1} value={(i+1).toString()}>{m}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Year</Label><Select value={form.year.toString()} onValueChange={v=>setForm(f=>({...f,year:parseInt(v)}))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{[2023,2024,2025,2026].map(y=><SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}</SelectContent></Select></div>
-              <div className="space-y-1.5"><Label>Deal Type</Label><Select value={form.deal_type} onValueChange={v=>setForm(f=>({...f,deal_type:v}))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['CPA','PNL','HYBRID','REBATES'].map(d=><SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1.5"><Label>Deal Type</Label><Select value={form.deal_type} onValueChange={v=>setForm(f=>({...f,deal_type:v}))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{DEAL_TYPES.map(d=><SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Amount ($) <span className="text-destructive">*</span></Label><Input value={form.revenue_amount} onChange={e=>setForm(f=>({...f,revenue_amount:e.target.value}))} placeholder="0.00" type="number" min="0" /></div>
             </div>
             <div className="space-y-1.5"><Label>Status</Label><Select value={form.status} onValueChange={v=>setForm(f=>({...f,status:v}))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="PENDING">Pending</SelectItem><SelectItem value="PAID">Paid</SelectItem><SelectItem value="AWAITED">Awaited</SelectItem><SelectItem value="CANCELLED">Cancelled</SelectItem></SelectContent></Select></div>
