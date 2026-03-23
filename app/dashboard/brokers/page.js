@@ -184,7 +184,25 @@ export default function BrokersPage() {
               <div className="space-y-1.5"><Label>Account Manager</Label><Input value={form.account_manager} onChange={e => setForm(f=>({...f,account_manager:e.target.value}))} /></div>
               <div className="space-y-1.5"><Label>Contact Email</Label><Input value={form.contact_email} onChange={e => setForm(f=>({...f,contact_email:e.target.value}))} type="email" /></div>
               <div className="space-y-1.5"><Label>Contact Phone</Label><Input value={form.contact_phone} onChange={e => setForm(f=>({...f,contact_phone:e.target.value}))} /></div>
-              <div className="space-y-1.5"><Label>Deal Types</Label><Input value={form.deal_types} onChange={e => setForm(f=>({...f,deal_types:e.target.value}))} placeholder="CPA, PNL, HYBRID" /></div>
+              <div className="space-y-1.5 col-span-2">
+                <Label>Deal Types</Label>
+                <div className="flex flex-wrap gap-3 pt-1">
+                  {['CPA','PNL','HYBRID','REBATES'].map(dt => {
+                    const selected = (form.deal_types||'').split(',').map(s=>s.trim()).filter(Boolean)
+                    const checked = selected.includes(dt)
+                    const toggle = () => {
+                      const next = checked ? selected.filter(s=>s!==dt) : [...selected, dt]
+                      setForm(f=>({...f, deal_types: next.join(', ')}))
+                    }
+                    return (
+                      <label key={dt} className="flex items-center gap-1.5 cursor-pointer select-none text-sm">
+                        <Checkbox checked={checked} onCheckedChange={toggle} />
+                        {dt}
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
             <div className="space-y-1.5"><Label>Notes</Label><Input value={form.notes} onChange={e => setForm(f=>({...f,notes:e.target.value}))} /></div>
             <div className="flex items-center gap-3"><Switch checked={form.is_active} onCheckedChange={v=>setForm(f=>({...f,is_active:v}))} /><Label>Active Broker</Label></div>
