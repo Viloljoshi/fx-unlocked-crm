@@ -154,7 +154,7 @@ export default function CompanyKPIsPage() {
           </Button>
           {isAdmin && (
             <Button size="sm" onClick={() => setAddOpen(true)}>
-              <Plus className="w-4 h-4 mr-1" /> Add Year
+              <Plus className="w-4 h-4 mr-1" /> Add KPI
             </Button>
           )}
         </div>
