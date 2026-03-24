@@ -64,20 +64,18 @@ export default function LoginPage() {
     if (!email) { toast.error('Please enter your email address'); return }
     setLoading(true)
     try {
-      const res = await fetch('/api/auth/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
       })
-      if (!res.ok) {
-        const data = await res.json()
-        // Only show rate limit errors — not "user not found" (prevent enumeration)
-        if (data.error?.includes('rate') || data.error?.includes('too many')) {
-          toast.error('Too many requests. Please wait a few minutes.')
+      // Always show success — don't reveal whether email exists (security best practice)
+      if (error) {
+        const msg = error.message || ''
+        if (msg.includes('rate limit') || msg.includes('over_email_send_rate_limit') || msg.includes('too many')) {
+          toast.error('Too many requests. Please wait a few minutes before trying again.')
           return
         }
+        // For any other error (incl. "user not found"), show generic success to avoid enumeration
       }
-      // Always show success
       setResetSent(true)
     } catch {
       toast.error('Something went wrong. Please try again.')
