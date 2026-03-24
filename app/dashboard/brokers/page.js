@@ -46,7 +46,7 @@ export default function BrokersPage() {
     setLoading(true)
     const [brkRes, affRes, commRes] = await Promise.all([
       supabase.from('brokers').select('*').order('created_at', { ascending: false }),
-      supabase.from('affiliates').select('id, broker_id'),
+      supabase.from('affiliate_brokers').select('affiliate_id, broker_id'),
       supabase.from('commissions').select('broker_id, revenue_amount'),
     ])
     setBrokers(brkRes.data || [])
