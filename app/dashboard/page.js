@@ -174,7 +174,7 @@ export default function DashboardPage() {
         // Onboarding affiliates for widget — fetch with broker name
         let onbQuery = supabase
           .from('affiliates')
-          .select('id, name, email, deal_type, created_at, broker:brokers(name)')
+          .select('id, name, email, deal_type, created_at, affiliate_brokers(broker:brokers(name))')
           .eq('status', 'ONBOARDING')
           .order('created_at', { ascending: false })
         if (!isAdmin) onbQuery = onbQuery.eq('manager_id', userId)
@@ -433,7 +433,7 @@ export default function DashboardPage() {
                     <div key={a.id} className="flex items-center justify-between py-2 border-b last:border-0">
                       <div>
                         <p className="font-medium text-sm">{a.name}</p>
-                        <p className="text-xs text-muted-foreground">{a.broker?.name || '—'}</p>
+                        <p className="text-xs text-muted-foreground">{(a.affiliate_brokers||[]).map(ab=>ab.broker?.name).filter(Boolean).join(', ') || '—'}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         {a.deal_type && (
@@ -675,7 +675,7 @@ function AffiliateDashboardContent() {
                         <Link href={`/dashboard/affiliates/${a.id}`} className="font-medium hover:text-primary hover:underline">{a.name}</Link>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{a.email}</TableCell>
-                      <TableCell className="text-sm">{a.broker?.name || '—'}</TableCell>
+                      <TableCell className="text-sm">{(a.affiliate_brokers||[]).map(ab=>ab.broker?.name).filter(Boolean).join(', ') || '—'}</TableCell>
                       <TableCell>
                         {a.deal_type ? <Badge variant="outline" className="text-xs">{a.deal_type}</Badge> : <span className="text-xs text-muted-foreground">—</span>}
                       </TableCell>
@@ -720,7 +720,7 @@ function AffiliateDashboardContent() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{a.email}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{a.phone || '—'}</TableCell>
-                      <TableCell className="text-sm">{a.broker?.name || '—'}</TableCell>
+                      <TableCell className="text-sm">{(a.affiliate_brokers||[]).map(ab=>ab.broker?.name).filter(Boolean).join(', ') || '—'}</TableCell>
                       <TableCell>
                         <Badge className={`text-xs ${AFF_STATUS_COLORS[a.status] || ''}`}>{a.status}</Badge>
                       </TableCell>

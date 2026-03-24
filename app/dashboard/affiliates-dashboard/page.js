@@ -186,7 +186,7 @@ export default function AffiliateDashboardPage() {
                         </Link>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{a.email}</TableCell>
-                      <TableCell className="text-sm">{a.broker?.name || '—'}</TableCell>
+                      <TableCell className="text-sm">{(a.affiliate_brokers||[]).map(ab=>ab.broker?.name).filter(Boolean).join(', ') || '—'}</TableCell>
                       <TableCell>
                         {a.deal_type ? (
                           <Badge variant="outline" className="text-xs font-medium">{a.deal_type}</Badge>
@@ -237,7 +237,7 @@ export default function AffiliateDashboardPage() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{a.email}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{a.phone || '—'}</TableCell>
-                      <TableCell className="text-sm">{a.broker?.name || '—'}</TableCell>
+                      <TableCell className="text-sm">{(a.affiliate_brokers||[]).map(ab=>ab.broker?.name).filter(Boolean).join(', ') || '—'}</TableCell>
                       <TableCell>
                         <Badge className={`text-xs ${STATUS_COLORS[a.status] || ''}`}>{a.status}</Badge>
                       </TableCell>
