@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
@@ -20,6 +21,42 @@ import Link from 'next/link'
 import { useUserRole } from '@/lib/hooks/useUserRole'
 import DealTypeFields from '@/components/deal-type-fields/DealTypeFields'
 import AffiliateCombobox from '@/components/affiliate-combobox/AffiliateCombobox'
+
+function BrokerMultiSelect({ brokers, value = [], onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+  const toggle = (id) => onChange(value.includes(id) ? value.filter(v => v !== id) : [...value, id])
+  const selectedNames = value.map(id => brokers.find(b => b.id === id)?.name).filter(Boolean)
+  return (
+    <div className="relative" ref={ref}>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="flex items-center justify-between w-full border rounded-md px-3 py-2 text-sm bg-background min-h-[36px] gap-2 hover:bg-muted/30 transition-colors">
+        <span className="flex-1 text-left truncate">
+          {selectedNames.length > 0 ? selectedNames.join(', ') : <span className="text-muted-foreground">Select brokers...</span>}
+        </span>
+        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-card border rounded-md shadow-lg max-h-48 overflow-y-auto">
+          {brokers.length === 0
+            ? <div className="px-3 py-2 text-xs text-muted-foreground">No brokers found</div>
+            : brokers.map(b => (
+              <label key={b.id} className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 cursor-pointer select-none">
+                <Checkbox checked={value.includes(b.id)} onCheckedChange={() => toggle(b.id)} />
+                {b.name}
+              </label>
+            ))
+          }
+        </div>
+      )}
+    </div>
+  )
+}
 
 // Combobox for free-text + profile search
 function ManagerCombobox({ profiles, value, valueText, onChange, onChangeText }) {
@@ -100,7 +137,7 @@ export default function AffiliateDetailPage() {
   const { role, userId } = useUserRole()
   const canWrite = role === 'ADMIN' || role === 'STAFF'
   const [affiliate, setAffiliate] = useState(null)
-  const [broker, setBroker] = useState(null)
+  const [affiliateBrokerIds, setAffiliateBrokerIds] = useState([])
   const [manager, setManager] = useState(null)
   const [masterIB, setMasterIB] = useState(null)
   const [subAffiliates, setSubAffiliates] = useState([])
@@ -129,7 +166,7 @@ export default function AffiliateDetailPage() {
   const load = async () => {
     setLoading(true)
     const [affRes, brkListRes, profListRes, allAffRes] = await Promise.all([
-      supabase.from('affiliates').select('*').eq('id', id).single(),
+      supabase.from('affiliates').select('*, affiliate_brokers(broker_id)').eq('id', id).single(),
       supabase.from('brokers').select('id, name'),
       supabase.from('profiles').select('id, first_name, last_name'),
       supabase.from('affiliates').select('id, name, status, deal_type'),
@@ -138,9 +175,11 @@ export default function AffiliateDetailPage() {
     setAllAffiliates(allAffRes.data || [])
     if (aff) {
       setAffiliate(aff)
+      const bids = aff.affiliate_brokers?.map(ab => ab.broker_id) || []
+      setAffiliateBrokerIds(bids)
       setEditForm({
         ...aff,
-        broker_id: aff.broker_id || 'none',
+        broker_ids: bids,
         manager_id: aff.manager_id || 'none',
         master_ib_id: aff.master_ib_id || 'none',
         deal_type: aff.deal_type || '',
@@ -148,10 +187,6 @@ export default function AffiliateDetailPage() {
       setEditManagerNameFree(aff.deal_details?.account_manager_name || '')
       setEditDealData(aff.deal_details?.deal || {})
       setDealNotes(aff.deal_details?.notes || '')
-      if (aff.broker_id) {
-        const { data: brk } = await supabase.from('brokers').select('*').eq('id', aff.broker_id).single()
-        setBroker(brk)
-      }
       if (aff.manager_id) {
         const { data: mgr } = await supabase.from('profiles').select('*').eq('id', aff.manager_id).single()
         setManager(mgr)
@@ -181,10 +216,14 @@ export default function AffiliateDetailPage() {
 
   const handleEdit = async () => {
     setSaving(true)
+    const brokerIds = editForm.broker_ids || []
     const payload = { ...editForm }
 
+    // Remove non-column fields
+    delete payload.broker_ids
+    delete payload.affiliate_brokers
+
     // Handle FK references
-    if (!payload.broker_id || payload.broker_id === 'none') payload.broker_id = null
     if (!payload.manager_id || payload.manager_id === 'none') payload.manager_id = null
     if (!payload.master_ib_id || payload.master_ib_id === 'none') payload.master_ib_id = null
     if (!payload.deal_type) payload.deal_type = null
@@ -210,6 +249,11 @@ export default function AffiliateDetailPage() {
 
     const { error } = await supabase.from('affiliates').update(payload).eq('id', id)
     if (error) { toast.error(error.message); setSaving(false); return }
+    // Sync affiliate_brokers junction table
+    await supabase.from('affiliate_brokers').delete().eq('affiliate_id', id)
+    if (brokerIds.length > 0) {
+      await supabase.from('affiliate_brokers').insert(brokerIds.map(bid => ({ affiliate_id: id, broker_id: bid })))
+    }
     toast.success('Affiliate updated')
     setEditOpen(false)
     setSaving(false)
@@ -288,7 +332,7 @@ export default function AffiliateDetailPage() {
           <Button variant="outline" size="sm" onClick={() => {
             setEditForm({
               ...affiliate,
-              broker_id: affiliate.broker_id || 'none',
+              broker_ids: affiliate.affiliate_brokers?.map(ab => ab.broker_id) || [],
               manager_id: affiliate.manager_id || 'none',
               master_ib_id: affiliate.master_ib_id || 'none',
               deal_type: affiliate.deal_type || '',
@@ -337,7 +381,7 @@ export default function AffiliateDetailPage() {
           <CardHeader className="pb-3"><CardTitle className="text-base">Details</CardTitle></CardHeader>
           <CardContent className="grid sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
             <div><span className="text-muted-foreground block text-xs">Master IB</span><p className="font-medium">{masterIB ? <Link href={`/dashboard/affiliates/${masterIB.id}`} className="text-primary hover:underline">{masterIB.name}</Link> : '-'}</p></div>
-            <div><span className="text-muted-foreground block text-xs">Broker</span><p className="font-medium">{broker?.name || '-'}</p></div>
+            <div><span className="text-muted-foreground block text-xs">Brokers</span><p className="font-medium">{affiliateBrokerIds.length > 0 ? affiliateBrokerIds.map(bid => brokers.find(b => b.id === bid)?.name).filter(Boolean).join(', ') : '-'}</p></div>
             <div><span className="text-muted-foreground block text-xs">Manager</span><p className="font-medium">{manager ? `${manager.first_name} ${manager.last_name}` : affiliate.deal_details?.account_manager_name || '-'}</p></div>
             <div><span className="text-muted-foreground block text-xs">Traffic Region</span><p className="font-medium">{affiliate.traffic_region || '-'}</p></div>
             <div><span className="text-muted-foreground block text-xs">Source</span><p className="font-medium">{affiliate.source || '-'}</p></div>
@@ -654,14 +698,8 @@ export default function AffiliateDetailPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Broker</Label>
-                <Select value={editForm.broker_id || 'none'} onValueChange={v => setEditForm(f => ({...f, broker_id: v}))}>
-                  <SelectTrigger><SelectValue placeholder="Select broker" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {brokers.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label>Brokers</Label>
+                <BrokerMultiSelect brokers={brokers} value={editForm.broker_ids || []} onChange={v => setEditForm(f => ({...f, broker_ids: v}))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Account Manager</Label>

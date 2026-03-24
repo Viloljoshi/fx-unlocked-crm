@@ -6,6 +6,7 @@ import Sidebar from '@/components/layout/Sidebar'
 import TopBar from '@/components/layout/TopBar'
 import CommandBar from '@/components/command-bar/CommandBar'
 import AIChat from '@/components/chat/AIChat'
+import TutorialOverlay from '@/components/ui/TutorialOverlay'
 
 export default function DashboardLayout({ children }) {
   const [collapsed, setCollapsed] = useState(false)
@@ -14,6 +15,7 @@ export default function DashboardLayout({ children }) {
   const [aiChatOpen, setAiChatOpen] = useState(false)
   const [profile, setProfile] = useState(null)
   const [user, setUser] = useState(null)
+  const [showTutorial, setShowTutorial] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
@@ -29,7 +31,7 @@ export default function DashboardLayout({ children }) {
         .single()
 
       if (error && error.code === 'PGRST116') {
-        // Profile doesn't exist, create it with all required fields from user metadata
+        // Profile doesn't exist — create it (first-time user)
         const { data: newProfile } = await supabase
           .from('profiles')
           .insert({
@@ -43,12 +45,27 @@ export default function DashboardLayout({ children }) {
           .select()
           .single()
         setProfile(newProfile)
+        // Brand-new profile has no onboarded_at — show tutorial
+        setShowTutorial(true)
       } else {
         setProfile(profileData)
+        // Existing user who hasn't completed onboarding
+        if (profileData && profileData.onboarded_at === null) {
+          setShowTutorial(true)
+        }
       }
     }
     loadProfile()
   }, [])
+
+  const handleTutorialComplete = async () => {
+    setShowTutorial(false)
+    if (!user) return
+    await supabase
+      .from('profiles')
+      .update({ onboarded_at: new Date().toISOString() })
+      .eq('id', user.id)
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -72,6 +89,7 @@ export default function DashboardLayout({ children }) {
       </div>
       <CommandBar open={commandBarOpen} setOpen={setCommandBarOpen} userId={user?.id} />
       <AIChat open={aiChatOpen} setOpen={setAiChatOpen} />
+      {showTutorial && <TutorialOverlay onComplete={handleTutorialComplete} />}
     </div>
   )
 }

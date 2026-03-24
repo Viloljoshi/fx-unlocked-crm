@@ -29,11 +29,47 @@ const STATUS_COLORS = {
 
 const EMPTY_FORM = {
   name: '', email: '', phone: '', status: 'LEAD',
-  deal_type: '', broker_id: 'none', manager_id: 'none',
+  deal_type: '', broker_ids: [], manager_id: 'none',
   master_ib_id: 'none',
   manager_name_free: '', // free-text AM name when not in profiles
   country: '', website: '', deal_terms: '', notes: '',
   deal_data: {}, // deal-type-specific fields stored in deal_details.deal JSONB
+}
+
+function BrokerMultiSelect({ brokers, value = [], onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+  const toggle = (id) => onChange(value.includes(id) ? value.filter(v => v !== id) : [...value, id])
+  const selectedNames = value.map(id => brokers.find(b => b.id === id)?.name).filter(Boolean)
+  return (
+    <div className="relative" ref={ref}>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="flex items-center justify-between w-full border rounded-md px-3 py-2 text-sm bg-background min-h-[36px] gap-2 hover:bg-muted/30 transition-colors">
+        <span className="flex-1 text-left truncate">
+          {selectedNames.length > 0 ? selectedNames.join(', ') : <span className="text-muted-foreground">Select brokers...</span>}
+        </span>
+        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-card border rounded-md shadow-lg max-h-48 overflow-y-auto">
+          {brokers.length === 0
+            ? <div className="px-3 py-2 text-xs text-muted-foreground">No brokers found</div>
+            : brokers.map(b => (
+              <label key={b.id} className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 cursor-pointer select-none">
+                <Checkbox checked={value.includes(b.id)} onCheckedChange={() => toggle(b.id)} />
+                {b.name}
+              </label>
+            ))
+          }
+        </div>
+      )}
+    </div>
+  )
 }
 
 // Combobox: shows profiles as dropdown suggestions + allows free-text
@@ -165,7 +201,7 @@ export default function AffiliatesPage() {
   const load = async () => {
     setLoading(true)
     // Staff see only their own affiliates; admin sees all
-    let affQuery = supabase.from('affiliates').select('*').order('created_at', { ascending: false })
+    let affQuery = supabase.from('affiliates').select('*, affiliate_brokers(broker_id)').order('created_at', { ascending: false })
     if (role && role !== 'ADMIN') affQuery = affQuery.eq('manager_id', userId)
 
     const [affRes, brkRes, profRes] = await Promise.all([
@@ -179,7 +215,10 @@ export default function AffiliatesPage() {
     setLoading(false)
   }
 
-  const getBrokerName = (id) => brokers.find(b => b.id === id)?.name || '-'
+  const getBrokerNames = (affiliateBrokers) => {
+    const names = (affiliateBrokers || []).map(ab => brokers.find(b => b.id === ab.broker_id)?.name).filter(Boolean)
+    return names.length > 0 ? names.join(', ') : '-'
+  }
   const getMasterIBName = (id) => affiliates.find(a => a.id === id)?.name || '-'
 
   // Display manager: prefer linked profile, fallback to deal_details.account_manager_name
@@ -196,7 +235,10 @@ export default function AffiliatesPage() {
     if (statusFilter !== 'all' && a.status !== statusFilter) return false
     if (dealTypeFilter === 'NONE' && a.deal_type) return false
     if (dealTypeFilter !== 'all' && dealTypeFilter !== 'NONE' && a.deal_type !== dealTypeFilter) return false
-    if (brokerFilter !== 'all' && a.broker_id !== brokerFilter) return false
+    if (brokerFilter !== 'all') {
+      const ids = (a.affiliate_brokers || []).map(ab => ab.broker_id)
+      if (!ids.includes(brokerFilter)) return false
+    }
     return true
   })
 
@@ -207,7 +249,7 @@ export default function AffiliatesPage() {
     setForm({
       name: a.name, email: a.email, phone: a.phone || '',
       status: a.status, deal_type: a.deal_type || '',
-      broker_id: a.broker_id || 'none', manager_id: a.manager_id || 'none',
+      broker_ids: a.affiliate_brokers?.map(ab => ab.broker_id) || [], manager_id: a.manager_id || 'none',
       master_ib_id: a.master_ib_id || 'none',
       manager_name_free: a.deal_details?.account_manager_name || '',
       country: a.country || '', website: a.website || '',
@@ -220,10 +262,14 @@ export default function AffiliatesPage() {
   const handleSave = async () => {
     if (!form.name || !form.email) { toast.error('Name and email are required'); return }
     setSaving(true)
+    const brokerIds = form.broker_ids || []
     const payload = { ...form }
 
+    // Remove non-column fields
+    delete payload.broker_ids
+    delete payload.affiliate_brokers
+
     // Handle FK references: convert 'none' → null
-    if (!payload.broker_id || payload.broker_id === 'none') { payload.broker_id = null }
     if (!payload.manager_id || payload.manager_id === 'none') { payload.manager_id = null }
     if (!payload.master_ib_id || payload.master_ib_id === 'none') { payload.master_ib_id = null }
 
@@ -255,13 +301,21 @@ export default function AffiliatesPage() {
     delete payload.manager_name_free
     delete payload.deal_data
 
-    let error
+    let error, savedId
     if (editTarget) {
-      ({ error } = await supabase.from('affiliates').update(payload).eq('id', editTarget.id))
+      ;({ error } = await supabase.from('affiliates').update(payload).eq('id', editTarget.id))
+      savedId = editTarget.id
     } else {
-      ({ error } = await supabase.from('affiliates').insert(payload))
+      const { data: ins, error: insErr } = await supabase.from('affiliates').insert(payload).select('id').single()
+      error = insErr
+      savedId = ins?.id
     }
     if (error) { toast.error(error.message); setSaving(false); return }
+    // Sync affiliate_brokers junction table
+    await supabase.from('affiliate_brokers').delete().eq('affiliate_id', savedId)
+    if (brokerIds.length > 0) {
+      await supabase.from('affiliate_brokers').insert(brokerIds.map(bid => ({ affiliate_id: savedId, broker_id: bid })))
+    }
     toast.success(editTarget ? 'Affiliate updated' : 'Affiliate added successfully')
     setAddOpen(false)
     setForm(EMPTY_FORM)
@@ -285,7 +339,7 @@ export default function AffiliatesPage() {
     const headers = ['Name', 'Email', 'Phone', 'Status', 'Deal Type', 'Broker', 'Manager', 'Master IB', 'Country']
     const rows = toExport.map(a => [
       a.name, a.email, a.phone || '', a.status, a.deal_type || '',
-      getBrokerName(a.broker_id), getManagerName(a), getMasterIBName(a.master_ib_id), a.country || ''
+      getBrokerNames(a.affiliate_brokers), getManagerName(a), getMasterIBName(a.master_ib_id), a.country || ''
     ])
     const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -377,7 +431,7 @@ export default function AffiliatesPage() {
                     <TableCell><Badge className={STATUS_COLORS[a.status] || ''}>{a.status}</Badge></TableCell>
                     <TableCell>{a.deal_type ? <Badge variant="outline" className="text-xs">{a.deal_type}</Badge> : <span className="text-xs text-muted-foreground">-</span>}</TableCell>
                     <TableCell className="text-sm">{getMasterIBName(a.master_ib_id)}</TableCell>
-                    <TableCell className="text-sm">{getBrokerName(a.broker_id)}</TableCell>
+                    <TableCell className="text-sm">{getBrokerNames(a.affiliate_brokers)}</TableCell>
                     <TableCell className="text-sm">{getManagerName(a)}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{a.country || '-'}</TableCell>
                     {canWrite && <TableCell onClick={e => e.stopPropagation()}><Button variant="ghost" size="icon" className="h-7 w-7" onClick={e => openEdit(a, e)}><Pencil className="w-3.5 h-3.5" /></Button></TableCell>}
@@ -441,14 +495,8 @@ export default function AffiliatesPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Broker</Label>
-                <Select value={form.broker_id} onValueChange={v => setForm(f => ({...f, broker_id: v}))}>
-                  <SelectTrigger><SelectValue placeholder="Select broker" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {brokers.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label>Brokers</Label>
+                <BrokerMultiSelect brokers={brokers} value={form.broker_ids} onChange={v => setForm(f => ({...f, broker_ids: v}))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Account Manager</Label>

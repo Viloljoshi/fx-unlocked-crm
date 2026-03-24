@@ -95,7 +95,7 @@ export default function DashboardPage() {
       setLoading(true)
       try {
         // Admin sees everything; staff sees only their own affiliates
-        let affQuery = supabase.from('affiliates').select('id, name, status, renewal_date, broker_id, manager_id')
+        let affQuery = supabase.from('affiliates').select('id, name, status, renewal_date, manager_id, affiliate_brokers(broker_id)')
         if (!isAdmin) affQuery = affQuery.eq('manager_id', userId)
 
         const [affRes, brokerRes] = await Promise.all([
@@ -174,7 +174,7 @@ export default function DashboardPage() {
         // Onboarding affiliates for widget — fetch with broker name
         let onbQuery = supabase
           .from('affiliates')
-          .select('id, name, email, deal_type, created_at, broker:brokers(name)')
+          .select('id, name, email, deal_type, created_at, affiliate_brokers(broker:brokers(name))')
           .eq('status', 'ONBOARDING')
           .order('created_at', { ascending: false })
         if (!isAdmin) onbQuery = onbQuery.eq('manager_id', userId)
@@ -433,7 +433,7 @@ export default function DashboardPage() {
                     <div key={a.id} className="flex items-center justify-between py-2 border-b last:border-0">
                       <div>
                         <p className="font-medium text-sm">{a.name}</p>
-                        <p className="text-xs text-muted-foreground">{a.broker?.name || '—'}</p>
+                        <p className="text-xs text-muted-foreground">{(a.affiliate_brokers||[]).map(ab=>ab.broker?.name).filter(Boolean).join(', ') || '—'}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         {a.deal_type && (
@@ -573,7 +573,7 @@ function AffiliateDashboardContent() {
       try {
         let affQuery = supabase
           .from('affiliates')
-          .select('id, name, email, phone, status, deal_type, created_at, broker_id, manager_id, broker:brokers(name)')
+          .select('id, name, email, phone, status, deal_type, created_at, manager_id, affiliate_brokers(broker_id, broker:brokers(name))')
         if (!isAdmin) affQuery = affQuery.eq('manager_id', userId)
         const [affRes, brkRes] = await Promise.all([
           affQuery,
@@ -597,14 +597,17 @@ function AffiliateDashboardContent() {
   const activeAffiliates = affiliates.filter(a => a.status === 'ACTIVE')
   const onboardingAffiliates = affiliates.filter(a => a.status === 'ONBOARDING')
   const newThisMonth = affiliates.filter(a => a.created_at && new Date(a.created_at) >= startOfMonth)
-  const activeBrokerIds = new Set(activeAffiliates.map(a => a.broker_id).filter(Boolean))
+  const activeBrokerIds = new Set(activeAffiliates.flatMap(a => (a.affiliate_brokers || []).map(ab => ab.broker_id)).filter(Boolean))
   const top5Latest = [...affiliates].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5)
 
-  const brokerMap = Object.fromEntries(brokers.map(b => [b.id, b.name]))
   const perBroker = {}
   affiliates.forEach(a => {
-    const name = a.broker?.name || brokerMap[a.broker_id] || 'Unknown'
-    perBroker[name] = (perBroker[name] || 0) + 1
+    const abs = a.affiliate_brokers || []
+    if (abs.length === 0) { perBroker['No Broker'] = (perBroker['No Broker'] || 0) + 1; return }
+    abs.forEach(ab => {
+      const name = ab.broker?.name || 'Unknown'
+      perBroker[name] = (perBroker[name] || 0) + 1
+    })
   })
   const chartData = Object.entries(perBroker).map(([name, count]) => ({ name, count }))
 
@@ -672,7 +675,7 @@ function AffiliateDashboardContent() {
                         <Link href={`/dashboard/affiliates/${a.id}`} className="font-medium hover:text-primary hover:underline">{a.name}</Link>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{a.email}</TableCell>
-                      <TableCell className="text-sm">{a.broker?.name || '—'}</TableCell>
+                      <TableCell className="text-sm">{(a.affiliate_brokers||[]).map(ab=>ab.broker?.name).filter(Boolean).join(', ') || '—'}</TableCell>
                       <TableCell>
                         {a.deal_type ? <Badge variant="outline" className="text-xs">{a.deal_type}</Badge> : <span className="text-xs text-muted-foreground">—</span>}
                       </TableCell>
@@ -717,7 +720,7 @@ function AffiliateDashboardContent() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{a.email}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{a.phone || '—'}</TableCell>
-                      <TableCell className="text-sm">{a.broker?.name || '—'}</TableCell>
+                      <TableCell className="text-sm">{(a.affiliate_brokers||[]).map(ab=>ab.broker?.name).filter(Boolean).join(', ') || '—'}</TableCell>
                       <TableCell>
                         <Badge className={`text-xs ${AFF_STATUS_COLORS[a.status] || ''}`}>{a.status}</Badge>
                       </TableCell>

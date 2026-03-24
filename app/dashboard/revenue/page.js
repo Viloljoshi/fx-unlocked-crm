@@ -61,13 +61,14 @@ export default function RevenuePage() {
     ])
 
     const myAffiliates = affRes.data || []
-    const myAffiliateIds = myAffiliates.map(a => a.id)
 
-    let commQuery = supabase.from('commissions').select('*').order('year',{ascending:false}).order('month',{ascending:false})
-    if (role !== 'ADMIN' && myAffiliateIds.length > 0) commQuery = commQuery.in('affiliate_id', myAffiliateIds)
-    else if (role !== 'ADMIN') commQuery = commQuery.eq('affiliate_id', 'none')
-
-    const { data: commData } = await commQuery
+    // RLS on commissions already restricts STAFF to their own records —
+    // no additional client-side filter needed.
+    const { data: commData } = await supabase
+      .from('commissions')
+      .select('*')
+      .order('year', { ascending: false })
+      .order('month', { ascending: false })
 
     setCommissions(commData || [])
     setAffiliates(myAffiliates)

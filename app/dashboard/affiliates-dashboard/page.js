@@ -41,7 +41,7 @@ export default function AffiliateDashboardPage() {
     try {
       let affQuery = supabase
         .from('affiliates')
-        .select('id, name, email, phone, status, deal_type, created_at, broker_id, manager_id, broker:brokers(name)')
+        .select('id, name, email, phone, status, deal_type, created_at, manager_id, affiliate_brokers(broker_id, broker:brokers(name))')
       if (!isAdmin) affQuery = affQuery.eq('manager_id', userId)
 
       const [affRes, brkRes] = await Promise.all([
@@ -66,7 +66,7 @@ export default function AffiliateDashboardPage() {
   const onboardingAffiliates = affiliates.filter(a => a.status === 'ONBOARDING')
   const newThisMonth = affiliates.filter(a => a.created_at && new Date(a.created_at) >= startOfMonth)
   // Active brokers = distinct brokers that have at least 1 active affiliate
-  const activeBrokerIds = new Set(activeAffiliates.map(a => a.broker_id).filter(Boolean))
+  const activeBrokerIds = new Set(activeAffiliates.flatMap(a => (a.affiliate_brokers || []).map(ab => ab.broker_id)).filter(Boolean))
   const activeBrokerCount = activeBrokerIds.size
 
   // Top 5 latest affiliates
@@ -75,11 +75,14 @@ export default function AffiliateDashboardPage() {
     .slice(0, 5)
 
   // Affiliates per broker chart data
-  const brokerMap = Object.fromEntries(brokers.map(b => [b.id, b.name]))
   const perBroker = {}
   affiliates.forEach(a => {
-    const name = a.broker?.name || brokerMap[a.broker_id] || 'Unknown'
-    perBroker[name] = (perBroker[name] || 0) + 1
+    const abs = a.affiliate_brokers || []
+    if (abs.length === 0) { perBroker['No Broker'] = (perBroker['No Broker'] || 0) + 1; return }
+    abs.forEach(ab => {
+      const name = ab.broker?.name || 'Unknown'
+      perBroker[name] = (perBroker[name] || 0) + 1
+    })
   })
   const chartData = Object.entries(perBroker).map(([name, count]) => ({ name, count }))
 
@@ -183,7 +186,7 @@ export default function AffiliateDashboardPage() {
                         </Link>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{a.email}</TableCell>
-                      <TableCell className="text-sm">{a.broker?.name || '—'}</TableCell>
+                      <TableCell className="text-sm">{(a.affiliate_brokers||[]).map(ab=>ab.broker?.name).filter(Boolean).join(', ') || '—'}</TableCell>
                       <TableCell>
                         {a.deal_type ? (
                           <Badge variant="outline" className="text-xs font-medium">{a.deal_type}</Badge>
@@ -234,7 +237,7 @@ export default function AffiliateDashboardPage() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{a.email}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{a.phone || '—'}</TableCell>
-                      <TableCell className="text-sm">{a.broker?.name || '—'}</TableCell>
+                      <TableCell className="text-sm">{(a.affiliate_brokers||[]).map(ab=>ab.broker?.name).filter(Boolean).join(', ') || '—'}</TableCell>
                       <TableCell>
                         <Badge className={`text-xs ${STATUS_COLORS[a.status] || ''}`}>{a.status}</Badge>
                       </TableCell>
