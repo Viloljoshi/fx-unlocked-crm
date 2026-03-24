@@ -30,7 +30,7 @@ const ENTITY_CONFIGS = {
       { key: 'name', label: 'Name', type: 'text', required: true },
       { key: 'email', label: 'Email', type: 'text', required: true },
       { key: 'phone', label: 'Phone', type: 'text' },
-      { key: 'broker_id', label: 'Broker', type: 'search', searchTable: 'brokers', searchField: 'name' },
+      { key: 'broker_id', label: 'Broker (optional, add more from profile)', type: 'search', searchTable: 'brokers', searchField: 'name' },
       { key: 'manager_id', label: 'Manager', type: 'search', searchTable: 'profiles', searchField: 'first_name' },
       { key: 'master_ib_id', label: 'Master IB', type: 'search', searchTable: 'affiliates', searchField: 'name' },
       { key: 'deal_type', label: 'Deal Type', type: 'select', options: ['CPA', 'PNL', 'HYBRID', 'REBATES'] },
@@ -268,10 +268,20 @@ export default function CommandBar({ open, setOpen, userId }) {
       const insertData = { ...data }
 
       if (entityType === 'affiliate') {
-        if (!insertData.broker_id) delete insertData.broker_id
+        const brokerId = insertData.broker_id
+        delete insertData.broker_id  // now in affiliate_brokers junction table
         if (!insertData.manager_id) delete insertData.manager_id
         if (!insertData.master_ib_id) delete insertData.master_ib_id
         if (!insertData.deal_type) insertData.deal_type = null
+
+        const { data: newAff, error: affErr } = await supabase.from(config.table).insert(insertData).select('id').single()
+        if (affErr) throw affErr
+        if (brokerId) {
+          await supabase.from('affiliate_brokers').insert({ affiliate_id: newAff.id, broker_id: brokerId })
+        }
+        toast.success('Affiliate created successfully!')
+        setOpen(false); reset(); router.refresh()
+        return
       }
       if (entityType === 'revenue') {
         insertData.month = parseInt(insertData.month)
