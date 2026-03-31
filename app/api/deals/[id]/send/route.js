@@ -38,8 +38,10 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Only draft deals can be sent for approval' }, { status: 400 })
     }
 
-    // Determine recipient — account manager from affiliate's manager_id
+    // Determine recipient: manager → admin fallback → current user fallback
     let recipientEmail = null
+    let recipientName = null
+
     if (deal.affiliate?.manager_id) {
       const { data: manager } = await supabase
         .from('profiles')
@@ -47,29 +49,39 @@ export async function POST(request, { params }) {
         .eq('id', deal.affiliate.manager_id)
         .single()
 
-      if (manager?.email) recipientEmail = manager.email
+      if (manager?.email) {
+        recipientEmail = manager.email
+        recipientName = `${manager.first_name || ''} ${manager.last_name || ''}`.trim()
+      }
     }
 
-    // Fallback: get all admins if no manager assigned
     if (!recipientEmail) {
       const { data: admins } = await supabase
         .from('profiles')
-        .select('email')
+        .select('email, first_name, last_name')
         .eq('role', 'ADMIN')
         .limit(1)
 
-      if (admins && admins.length > 0) recipientEmail = admins[0].email
+      if (admins?.[0]?.email) {
+        recipientEmail = admins[0].email
+        recipientName = `${admins[0].first_name || ''} ${admins[0].last_name || ''}`.trim()
+      }
+    }
+
+    // Final fallback: current user's email
+    if (!recipientEmail) {
+      recipientEmail = user.email
     }
 
     if (!recipientEmail) {
-      return NextResponse.json({ error: 'No account manager or admin found to send approval to' }, { status: 400 })
+      return NextResponse.json({ error: 'No recipient email found' }, { status: 400 })
     }
 
     // Generate secure token
     const token = randomBytes(32).toString('hex')
-    const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000) // 72 hours
+    const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000)
 
-    // Invalidate any existing unused tokens for this deal
+    // Invalidate existing unused tokens
     await supabase
       .from('deal_approval_tokens')
       .update({ used: true, used_at: new Date().toISOString() })
@@ -88,12 +100,12 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Failed to create approval token' }, { status: 500 })
     }
 
-    // Build approval/rejection URLs
+    // Build URLs
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
     const approveUrl = `${baseUrl}/deals/approve?token=${token}`
     const rejectUrl = `${baseUrl}/deals/approve?token=${token}&action=reject`
 
-    // Send email
+    // Build email HTML
     const html = dealApprovalEmailHtml({
       deal,
       affiliate: deal.affiliate,
@@ -103,6 +115,7 @@ export async function POST(request, { params }) {
       rejectUrl,
     })
 
+    // Send email
     try {
       await sendEmail({
         to: recipientEmail,
@@ -110,49 +123,67 @@ export async function POST(request, { params }) {
         html,
       })
     } catch (emailErr) {
-      console.error('Email send failed:', emailErr)
-      return NextResponse.json({ error: `Email failed: ${emailErr.message}` }, { status: 500 })
+      console.error('Email send failed to:', recipientEmail, emailErr)
+      return NextResponse.json({
+        error: `Email failed to ${recipientEmail}: ${emailErr.message}`,
+      }, { status: 500 })
     }
 
     // Update deal status to PENDING
-    await supabase
+    const { error: statusErr } = await supabase
       .from('deals')
       .update({ status: 'PENDING', sent_at: new Date().toISOString() })
       .eq('id', id)
 
-    // Version + audit
-    const { data: lastVersion } = await supabase
-      .from('deal_versions')
-      .select('version_number')
-      .eq('deal_id', id)
-      .order('version_number', { ascending: false })
-      .limit(1)
-      .single()
+    if (statusErr) {
+      console.error('Failed to update deal status:', statusErr)
+      // Email was sent but status update failed — still inform user
+      return NextResponse.json({
+        success: true,
+        warning: 'Email sent but deal status update failed. Please refresh.',
+        message: `Approval email sent to ${recipientEmail}`,
+      })
+    }
 
-    await supabase.from('deal_versions').insert({
-      deal_id: id,
-      version_number: (lastVersion?.version_number || 0) + 1,
-      changes: { action: 'SENT_FOR_APPROVAL', sent_to: recipientEmail },
-      changed_by: user.id,
+    // Version + audit (non-critical, don't fail the request)
+    try {
+      const { data: lastVersion } = await supabase
+        .from('deal_versions')
+        .select('version_number')
+        .eq('deal_id', id)
+        .order('version_number', { ascending: false })
+        .limit(1)
+        .single()
+
+      await supabase.from('deal_versions').insert({
+        deal_id: id,
+        version_number: (lastVersion?.version_number || 0) + 1,
+        changes: { action: 'SENT_FOR_APPROVAL', sent_to: recipientEmail },
+        changed_by: user.id,
+      })
+
+      await supabase.from('audit_logs').insert({
+        user_id: user.id,
+        action: 'UPDATE',
+        entity_type: 'DEAL',
+        entity_id: id,
+        changes: { status: { from: 'DRAFT', to: 'PENDING' }, sent_to: recipientEmail },
+      })
+
+      await supabase.from('deal_notes').insert({
+        deal_id: id,
+        content: `Deal sent for approval to ${recipientName || recipientEmail}`,
+        note_type: 'APPROVAL',
+        user_id: user.id,
+      })
+    } catch (auditErr) {
+      console.error('Audit logging failed (non-critical):', auditErr)
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `Approval email sent to ${recipientEmail}`,
     })
-
-    await supabase.from('audit_logs').insert({
-      user_id: user.id,
-      action: 'UPDATE',
-      entity_type: 'DEAL',
-      entity_id: id,
-      changes: { status: { from: 'DRAFT', to: 'PENDING' }, sent_to: recipientEmail },
-    })
-
-    // Auto-add approval note
-    await supabase.from('deal_notes').insert({
-      deal_id: id,
-      content: `Deal sent for approval to ${recipientEmail}`,
-      note_type: 'APPROVAL',
-      user_id: user.id,
-    })
-
-    return NextResponse.json({ success: true, message: `Approval email sent to ${recipientEmail}` })
   } catch (err) {
     console.error('Deal send error:', err)
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 })
