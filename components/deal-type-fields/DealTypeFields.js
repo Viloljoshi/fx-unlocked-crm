@@ -136,15 +136,15 @@ function CPATiers({ tiers = [], onChange, readOnly }) {
   )
 }
 
-// ── Rebates per Lot ──────────────────────────────────────────────────────────
+// ── Rebates per Lot (single section) ─────────────────────────────────────────
 
-function RebatesPerLot({ data = {}, onChange, readOnly }) {
+function RebatesPerLot({ label = 'Rebates per Lot', data = {}, onChange, readOnly, accent }) {
   const update = (key, val) => onChange({ ...data, [key]: val })
 
   if (readOnly) {
     return (
       <div className="space-y-1.5">
-        <Label>Rebates per Lot</Label>
+        <Label>{label}</Label>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
           <div><span className="text-muted-foreground text-xs">Forex:</span> <strong>{data.forex || '-'}</strong></div>
           <div><span className="text-muted-foreground text-xs">Gold:</span> <strong>{data.gold || '-'}</strong></div>
@@ -156,8 +156,8 @@ function RebatesPerLot({ data = {}, onChange, readOnly }) {
   }
 
   return (
-    <div className="space-y-1.5">
-      <Label>Rebates per Lot</Label>
+    <div className={`space-y-2 rounded-lg border p-3 ${accent || ''}`}>
+      <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</Label>
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Forex</Label>
@@ -226,7 +226,23 @@ export default function DealTypeFields({ dealType, dealData = {}, onChange, read
         <>
           <NetDepositsField value={dealData.net_deposits_per_month} onChange={val => update('net_deposits_per_month', val)} readOnly={readOnly} />
           <ExpectedVolumeField value={dealData.expected_volume_per_month} onChange={val => update('expected_volume_per_month', val)} readOnly={readOnly} />
-          <RebatesPerLot data={dealData.rebates_per_lot || {}} onChange={val => update('rebates_per_lot', val)} readOnly={readOnly} />
+          <div className="space-y-3">
+            {readOnly && <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rebates per Lot</Label>}
+            <RebatesPerLot
+              label="IB Deal"
+              data={dealData.ib_deal || dealData.rebates_per_lot || {}}
+              onChange={val => update('ib_deal', val)}
+              readOnly={readOnly}
+              accent="bg-blue-50/50 border-blue-100"
+            />
+            <RebatesPerLot
+              label="FX Unlocked Earnings"
+              data={dealData.fx_unlocked_earnings || {}}
+              onChange={val => update('fx_unlocked_earnings', val)}
+              readOnly={readOnly}
+              accent="bg-purple-50/50 border-purple-100"
+            />
+          </div>
         </>
       )}
 
@@ -246,13 +262,29 @@ export default function DealTypeFields({ dealType, dealData = {}, onChange, read
       )}
 
       {/* ── Hybrid (CPA + Rebates) ────────────────────────────────── */}
-      {/* Order: Net Deposits → Volume → CPA Tiers → Rebates per Lot */}
+      {/* Order: Net Deposits → Volume → CPA Tiers → IB Deal → FX Unlocked Earnings */}
       {isHybrid && (
         <>
           <NetDepositsField value={dealData.net_deposits_per_month} onChange={val => update('net_deposits_per_month', val)} readOnly={readOnly} />
           <ExpectedVolumeField value={dealData.expected_volume_per_month} onChange={val => update('expected_volume_per_month', val)} readOnly={readOnly} />
           <CPATiers tiers={dealData.cpa_tiers || []} onChange={val => update('cpa_tiers', val)} readOnly={readOnly} />
-          <RebatesPerLot data={dealData.rebates_per_lot || {}} onChange={val => update('rebates_per_lot', val)} readOnly={readOnly} />
+          <div className="space-y-3">
+            {readOnly && <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rebates per Lot</Label>}
+            <RebatesPerLot
+              label="IB Deal"
+              data={dealData.ib_deal || dealData.rebates_per_lot || {}}
+              onChange={val => update('ib_deal', val)}
+              readOnly={readOnly}
+              accent="bg-blue-50/50 border-blue-100"
+            />
+            <RebatesPerLot
+              label="FX Unlocked Earnings"
+              data={dealData.fx_unlocked_earnings || {}}
+              onChange={val => update('fx_unlocked_earnings', val)}
+              readOnly={readOnly}
+              accent="bg-purple-50/50 border-purple-100"
+            />
+          </div>
         </>
       )}
 
