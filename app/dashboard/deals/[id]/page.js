@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
-import { useRouter } from 'next/navigation'
-import { ArrowLeft, Send, Edit3, Save } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { useRouter, useParams } from 'next/navigation'
+import { ArrowLeft, Send, Edit3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -17,8 +17,8 @@ import DealHistory from '@/components/deals/DealHistory'
 import DealForm from '@/components/deals/DealForm'
 import { createClient } from '@/lib/supabase/client'
 
-export default function DealDetailPage({ params }) {
-  const { id } = use(params)
+export default function DealDetailPage() {
+  const { id } = useParams()
   const router = useRouter()
   const supabase = createClient()
 
@@ -29,8 +29,10 @@ export default function DealDetailPage({ params }) {
   const [affiliates, setAffiliates] = useState([])
 
   useEffect(() => {
-    fetchDeal()
-    fetchAffiliates()
+    if (id) {
+      fetchDeal()
+      fetchAffiliates()
+    }
   }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function fetchDeal(showLoader = true) {
@@ -38,11 +40,11 @@ export default function DealDetailPage({ params }) {
     try {
       const res = await fetch(`/api/deals/${id}`)
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
+      if (!res.ok) throw new Error(data.error || 'Failed to load deal')
       setDeal(data.deal)
     } catch (err) {
       console.error('Error fetching deal:', err)
-      toast.error('Failed to load deal')
+      toast.error(err.message || 'Failed to load deal')
     } finally {
       if (showLoader) setLoading(false)
     }
@@ -58,8 +60,8 @@ export default function DealDetailPage({ params }) {
     try {
       const res = await fetch(`/api/deals/${id}/send`, { method: 'POST' })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      toast.success(data.message)
+      if (!res.ok) throw new Error(data.error || 'Failed to send deal')
+      toast.success(data.message || 'Deal sent for approval')
       fetchDeal(false)
     } catch (err) {
       toast.error(err.message || 'Failed to send deal')
@@ -75,17 +77,17 @@ export default function DealDetailPage({ params }) {
       body: JSON.stringify(payload),
     })
     const data = await res.json()
-    if (!res.ok) throw new Error(data.error)
+    if (!res.ok) throw new Error(data.error || 'Failed to update deal')
     toast.success('Deal updated successfully')
     setEditing(false)
     fetchDeal(false)
   }
 
   function handleNoteAdded(note) {
-    setDeal((prev) => ({
+    setDeal((prev) => prev ? ({
       ...prev,
       deal_notes: [note, ...(prev.deal_notes || [])],
-    }))
+    }) : prev)
   }
 
   if (loading) {

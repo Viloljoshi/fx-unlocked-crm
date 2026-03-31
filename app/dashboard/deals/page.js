@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -43,6 +44,7 @@ export default function DealsPage() {
       setDeals(data || [])
     } catch (err) {
       console.error('Error fetching deals:', err)
+      toast.error('Failed to load deals')
     } finally {
       setLoading(false)
     }

@@ -62,6 +62,7 @@ export default function DealNotes({ dealId, notes = [], onNoteAdded }) {
             <SelectContent>
               <SelectItem value="GENERAL">General</SelectItem>
               <SelectItem value="INTERNAL">Internal</SelectItem>
+              <SelectItem value="APPROVAL">Approval</SelectItem>
             </SelectContent>
           </Select>
           <Textarea

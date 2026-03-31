@@ -9,7 +9,7 @@ export async function GET(request, { params }) {
     const { user } = await getAuthUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { id } = await params
+    const { id } = params
     const supabase = createAdminClient()
 
     // Fetch deal + relations separately to avoid FK name issues
@@ -83,7 +83,7 @@ export async function PUT(request, { params }) {
     const { user, role } = await getAuthUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { id } = await params
+    const { id } = params
     const body = await request.json()
     const { affiliate_id, broker_id, deal_type, deal_terms, deal_details, levels, status } = body
 

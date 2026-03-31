@@ -15,7 +15,7 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
     }
 
-    const { id } = await params
+    const { id } = params
     const supabase = createAdminClient()
 
     // Fetch deal with relations

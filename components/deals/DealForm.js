@@ -77,7 +77,7 @@ export default function DealForm({ deal, onSave, onCancel, mode = 'create' }) {
         deal_terms: dealTerms || null,
         deal_details: dealDetails,
         levels,
-        status: asDraft ? 'DRAFT' : undefined,
+        status: mode === 'create' ? 'DRAFT' : undefined,
       }
 
       if (onSave) await onSave(payload)
