@@ -93,8 +93,8 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Failed to create approval token' }, { status: 500 })
     }
 
-    // Build URLs
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+    // Build URLs (trim trailing slash to prevent double-slash)
+    const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '')
     const approveUrl = `${baseUrl}/deals/approve?token=${token}`
     const rejectUrl = `${baseUrl}/deals/approve?token=${token}&action=reject`
 
