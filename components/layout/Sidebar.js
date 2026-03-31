@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, Building2, DollarSign, UserCog, Shield,
-  BarChart3, ScrollText, TrendingUp, MessageSquare, Settings, X, ChevronLeft, ChevronRight, Calendar, LineChart
+  BarChart3, ScrollText, TrendingUp, MessageSquare, Settings, X, ChevronLeft, ChevronRight, Calendar, LineChart, Handshake
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -17,6 +17,7 @@ const navItems = [
   { name: 'Revenue', href: '/dashboard/revenue', icon: DollarSign },
   { name: 'Appointments', href: '/dashboard/appointments', icon: Calendar },
   { name: 'Analytics', href: '/dashboard/analytics', icon: LineChart },
+  { name: 'Deals', href: '/dashboard/deals', icon: Handshake },
 ]
 
 const adminItems = [

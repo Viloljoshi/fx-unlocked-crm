@@ -1,5 +1,6 @@
 -- ============================================================
--- FX Unlocked CRM — Supabase Migration / Sync Script v6
+-- FX Unlocked CRM — Supabase Migration / Sync Script v7
+-- NOTE: For Deals module tables, run supabase-deals-migration.sql separately
 -- Run this in: Supabase Dashboard → SQL Editor → New Query
 -- Safe to run multiple times (all statements are idempotent)
 -- ============================================================
