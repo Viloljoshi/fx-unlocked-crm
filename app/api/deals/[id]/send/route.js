@@ -34,8 +34,8 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Deal not found' }, { status: 404 })
     }
 
-    if (deal.status !== 'DRAFT') {
-      return NextResponse.json({ error: 'Only draft deals can be sent for approval' }, { status: 400 })
+    if (!['DRAFT', 'PENDING'].includes(deal.status)) {
+      return NextResponse.json({ error: 'Only draft or pending deals can be sent for approval' }, { status: 400 })
     }
 
     // Determine recipient: manager → admin fallback → current user fallback

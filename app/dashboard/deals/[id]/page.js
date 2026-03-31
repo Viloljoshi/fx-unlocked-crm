@@ -177,12 +177,12 @@ export default function DealDetailPage() {
               <Edit3 className="w-3.5 h-3.5 mr-1.5" /> Edit
             </Button>
           )}
-          {deal.status === 'DRAFT' && (
+          {['DRAFT', 'PENDING'].includes(deal.status) && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button size="sm" disabled={sending}>
+                <Button size="sm" variant={deal.status === 'PENDING' ? 'outline' : 'default'} disabled={sending}>
                   <Send className="w-3.5 h-3.5 mr-1.5" />
-                  {sending ? 'Sending...' : 'Send Deal'}
+                  {sending ? 'Sending...' : deal.status === 'PENDING' ? 'Resend Email' : 'Send Deal'}
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
