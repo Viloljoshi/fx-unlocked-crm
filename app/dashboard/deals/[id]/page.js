@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { ArrowLeft, Send, Edit3 } from 'lucide-react'
+import { ArrowLeft, Send, Edit3, CheckCircle2, XCircle } from 'lucide-react'
+import { useUserRole } from '@/lib/hooks/useUserRole'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -22,9 +23,11 @@ export default function DealDetailPage() {
   const router = useRouter()
   const supabase = createClient()
 
+  const { isAdmin } = useUserRole()
   const [deal, setDeal] = useState(null)
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [approving, setApproving] = useState(false)
   const [editing, setEditing] = useState(false)
   const [affiliates, setAffiliates] = useState([])
 
@@ -67,6 +70,25 @@ export default function DealDetailPage() {
       toast.error(err.message || 'Failed to send deal')
     } finally {
       setSending(false)
+    }
+  }
+
+  async function handleApproveReject(action) {
+    setApproving(true)
+    try {
+      const res = await fetch(`/api/deals/${id}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || `Failed to ${action} deal`)
+      toast.success(data.message)
+      fetchDeal(false)
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setApproving(false)
     }
   }
 
@@ -179,6 +201,53 @@ export default function DealDetailPage() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+          )}
+          {/* In-app Approve/Reject for ADMIN on PENDING or DRAFT deals */}
+          {isAdmin && ['PENDING', 'DRAFT'].includes(deal.status) && (
+            <>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button size="sm" variant="default" className="bg-green-600 hover:bg-green-700" disabled={approving}>
+                    <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Approve
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Approve this deal?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will mark the deal as Active. If the affiliate is in Onboarding status, they will be moved to Active.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => handleApproveReject('approve')} className="bg-green-600 hover:bg-green-700">
+                      Approve Deal
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button size="sm" variant="destructive" disabled={approving}>
+                    <XCircle className="w-3.5 h-3.5 mr-1.5" /> Reject
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Reject this deal?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will mark the deal as Rejected. You can still edit and resubmit later.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => handleApproveReject('reject')} className="bg-destructive hover:bg-destructive/90">
+                      Reject Deal
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </>
           )}
         </div>
       </div>
