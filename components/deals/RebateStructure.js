@@ -20,10 +20,10 @@ const DEFAULT_LEVEL = {
   level_number: 0,
   label: '',
   affiliate_id: null,
-  rebate_forex: 0,
-  rebate_gold: 0,
-  rebate_crypto: 0,
-  rebate_custom: 0,
+  rebate_forex: '',
+  rebate_gold: '',
+  rebate_crypto: '',
+  rebate_custom: '',
 }
 
 export default function RebateStructure({ levels = [], onChange, affiliates = [], readOnly = false }) {
@@ -79,7 +79,7 @@ export default function RebateStructure({ levels = [], onChange, affiliates = []
   const handleFieldChange = (levelNumber, field, value) => {
     const updated = localLevels.map((l) =>
       l.level_number === levelNumber
-        ? { ...l, [field]: field.startsWith('rebate_') ? parseFloat(value) || 0 : value }
+        ? { ...l, [field]: field.startsWith('rebate_') ? value : value }
         : l
     )
     updateLevels(updated)
@@ -232,8 +232,9 @@ export default function RebateStructure({ levels = [], onChange, affiliates = []
                             type="number"
                             step="0.0001"
                             min="0"
-                            value={level[key]}
+                            value={level[key] === 0 || level[key] === '0' ? '' : level[key]}
                             onChange={(e) => handleFieldChange(level.level_number, key, e.target.value)}
+                            placeholder="0"
                             disabled={readOnly}
                             className="h-8 text-sm"
                           />

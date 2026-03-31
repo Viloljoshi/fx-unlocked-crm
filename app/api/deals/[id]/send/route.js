@@ -103,11 +103,16 @@ export async function POST(request, { params }) {
       rejectUrl,
     })
 
-    await sendEmail({
-      to: recipientEmail,
-      subject: `Deal Approval Required — ${deal.affiliate?.name || 'Unknown Affiliate'}`,
-      html,
-    })
+    try {
+      await sendEmail({
+        to: recipientEmail,
+        subject: `Deal Approval Required — ${deal.affiliate?.name || 'Unknown Affiliate'}`,
+        html,
+      })
+    } catch (emailErr) {
+      console.error('Email send failed:', emailErr)
+      return NextResponse.json({ error: `Email failed: ${emailErr.message}` }, { status: 500 })
+    }
 
     // Update deal status to PENDING
     await supabase
@@ -150,6 +155,6 @@ export async function POST(request, { params }) {
     return NextResponse.json({ success: true, message: `Approval email sent to ${recipientEmail}` })
   } catch (err) {
     console.error('Deal send error:', err)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 })
   }
 }

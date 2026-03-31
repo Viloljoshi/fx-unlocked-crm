@@ -233,7 +233,11 @@ export default function DealDetailPage() {
         <TabsContent value="history" className="mt-4">
           <Card>
             <CardContent className="pt-6">
-              <DealHistory versions={deal.deal_versions || []} />
+              <DealHistory
+                versions={deal.deal_versions || []}
+                dealId={deal.id}
+                onRestore={() => fetchDeal(false)}
+              />
             </CardContent>
           </Card>
         </TabsContent>
