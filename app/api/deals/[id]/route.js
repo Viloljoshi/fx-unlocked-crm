@@ -100,8 +100,8 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: 'Deal not found' }, { status: 404 })
     }
 
-    // Only draft/pending deals can be edited (unless admin)
-    if (!['DRAFT', 'PENDING'].includes(existing.status) && role !== 'ADMIN') {
+    // Only draft/pending deals can be edited — approved/rejected deals are locked
+    if (!['DRAFT', 'PENDING'].includes(existing.status)) {
       return NextResponse.json({ error: 'Only draft or pending deals can be edited' }, { status: 400 })
     }
 
