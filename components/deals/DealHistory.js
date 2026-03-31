@@ -101,7 +101,8 @@ export default function DealHistory({ versions = [], dealId, onRestore }) {
             const action = changes.action || 'UPDATED'
             const isLatest = idx === 0
             const colorClass = actionColors[action] || actionColors.UPDATED
-            const changeEntries = Object.entries(changes).filter(([key]) => key !== 'action' && key !== 'snapshot')
+            const changeEntries = Object.entries(changes).filter(([key]) => key !== 'action' && key !== 'snapshot' && key !== 'restored_from' && key !== 'updates')
+            const restoredFrom = changes.restored_from
 
             return (
               <div key={version.id} className="relative pl-10">
@@ -115,7 +116,7 @@ export default function DealHistory({ versions = [], dealId, onRestore }) {
                         v{version.version_number}
                       </Badge>
                       <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${colorClass}`}>
-                        {action.replace(/_/g, ' ')}
+                        {action === 'RESTORED' ? `Restored to ${restoredFrom || '?'}` : action.replace(/_/g, ' ')}
                       </span>
                       {isLatest && (
                         <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded">

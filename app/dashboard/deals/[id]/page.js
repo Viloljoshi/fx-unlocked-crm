@@ -225,6 +225,7 @@ export default function DealDetailPage() {
                 dealId={deal.id}
                 notes={deal.deal_notes || []}
                 onNoteAdded={handleNoteAdded}
+                onNotesChanged={() => fetchDeal(false)}
               />
             </CardContent>
           </Card>

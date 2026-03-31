@@ -3,14 +3,21 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { toast } from 'sonner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { MessageSquare, Send } from 'lucide-react'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { toast } from 'sonner'
+import { MessageSquare, Send, Pencil, Trash2, Check, X } from 'lucide-react'
 
-export default function DealNotes({ dealId, notes = [], onNoteAdded }) {
+export default function DealNotes({ dealId, notes = [], onNoteAdded, onNotesChanged }) {
   const [content, setContent] = useState('')
   const [noteType, setNoteType] = useState('GENERAL')
   const [submitting, setSubmitting] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [editContent, setEditContent] = useState('')
+  const [editType, setEditType] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [deleteNote, setDeleteNote] = useState(null)
+  const [deleting, setDeleting] = useState(false)
 
   const handleSubmit = async () => {
     if (!content.trim()) return
@@ -36,6 +43,61 @@ export default function DealNotes({ dealId, notes = [], onNoteAdded }) {
       toast.error('Failed to add note')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const startEdit = (note) => {
+    setEditingId(note.id)
+    setEditContent(note.content)
+    setEditType(note.note_type)
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditContent('')
+    setEditType('')
+  }
+
+  const handleEdit = async (noteId) => {
+    if (!editContent.trim()) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/deals/${dealId}/notes/${noteId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: editContent.trim(), note_type: editType }),
+      })
+      if (res.ok) {
+        toast.success('Note updated')
+        cancelEdit()
+        if (onNotesChanged) onNotesChanged()
+      } else {
+        const errData = await res.json().catch(() => ({}))
+        toast.error(errData.error || 'Failed to update note')
+      }
+    } catch (err) {
+      toast.error('Failed to update note')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (noteId) => {
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/deals/${dealId}/notes/${noteId}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast.success('Note deleted')
+        setDeleteNote(null)
+        if (onNotesChanged) onNotesChanged()
+      } else {
+        const errData = await res.json().catch(() => ({}))
+        toast.error(errData.error || 'Failed to delete note')
+      }
+    } catch (err) {
+      toast.error('Failed to delete note')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -90,24 +152,84 @@ export default function DealNotes({ dealId, notes = [], onNoteAdded }) {
               key={note.id}
               className={`border rounded-lg p-3 text-sm ${noteTypeColors[note.note_type] || noteTypeColors.GENERAL}`}
             >
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-medium text-xs uppercase tracking-wide">{note.note_type}</span>
-                <span className="text-xs text-muted-foreground">
-                  {new Date(note.created_at).toLocaleDateString('en-US', {
-                    month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
-                  })}
-                </span>
-              </div>
-              <p className="text-foreground">{note.content}</p>
-              {note.user && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  — {note.user.first_name} {note.user.last_name}
-                </p>
+              {editingId === note.id ? (
+                /* Edit mode */
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <Select value={editType} onValueChange={setEditType}>
+                      <SelectTrigger className="w-[120px] h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="GENERAL">General</SelectItem>
+                        <SelectItem value="INTERNAL">Internal</SelectItem>
+                        <SelectItem value="APPROVAL">Approval</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    className="min-h-[50px] text-sm"
+                  />
+                  <div className="flex justify-end gap-1.5">
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={cancelEdit} disabled={saving}>
+                      <X className="w-3 h-3 mr-1" /> Cancel
+                    </Button>
+                    <Button size="sm" className="h-7 text-xs" onClick={() => handleEdit(note.id)} disabled={!editContent.trim() || saving}>
+                      <Check className="w-3 h-3 mr-1" /> {saving ? 'Saving...' : 'Save'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                /* View mode */
+                <>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-medium text-xs uppercase tracking-wide">{note.note_type}</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-muted-foreground mr-1">
+                        {new Date(note.created_at).toLocaleDateString('en-US', {
+                          month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
+                        })}
+                      </span>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" title="Edit" onClick={() => startEdit(note)}>
+                        <Pencil className="w-3 h-3" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" title="Delete" onClick={() => setDeleteNote(note)}>
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-foreground">{note.content}</p>
+                  {note.user && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      — {note.user.first_name} {note.user.last_name}
+                    </p>
+                  )}
+                </>
               )}
             </div>
           ))}
         </div>
       )}
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteNote} onOpenChange={() => setDeleteNote(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this note?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove this note. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => handleDelete(deleteNote.id)} disabled={deleting} className="bg-destructive hover:bg-destructive/90">
+              {deleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
