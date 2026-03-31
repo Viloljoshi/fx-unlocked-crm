@@ -34,8 +34,7 @@ export default function DealsPage() {
         .select(`
           *,
           affiliate:affiliates(id, name, email),
-          broker:brokers(id, name),
-          creator:profiles!deals_created_by_fkey(id, first_name, last_name)
+          broker:brokers(id, name)
         `)
         .order('created_at', { ascending: false })
 

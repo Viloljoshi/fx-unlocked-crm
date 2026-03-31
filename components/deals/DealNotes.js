@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { toast } from 'sonner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { MessageSquare, Send } from 'lucide-react'
 
@@ -25,9 +26,14 @@ export default function DealNotes({ dealId, notes = [], onNoteAdded }) {
         setContent('')
         setNoteType('GENERAL')
         if (onNoteAdded) onNoteAdded(data.note)
+        toast.success('Note added')
+      } else {
+        const errData = await res.json().catch(() => ({}))
+        toast.error(errData.error || 'Failed to add note')
       }
     } catch (err) {
       console.error('Error adding note:', err)
+      toast.error('Failed to add note')
     } finally {
       setSubmitting(false)
     }

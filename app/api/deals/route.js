@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient, getAuthUser } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/deals — list deals with optional filters
 export async function GET(request) {
   try {
@@ -20,7 +22,6 @@ export async function GET(request) {
         *,
         affiliate:affiliates(id, name, email, status),
         broker:brokers(id, name),
-        creator:profiles!deals_created_by_fkey(id, first_name, last_name, email),
         deal_levels(*)
       `)
       .order('created_at', { ascending: false })
@@ -65,6 +66,20 @@ export async function POST(request) {
     }
 
     const supabase = createAdminClient()
+
+    // Validate affiliate exists and is not inactive
+    const { data: affiliate, error: affErr } = await supabase
+      .from('affiliates')
+      .select('id, status')
+      .eq('id', affiliate_id)
+      .single()
+
+    if (affErr || !affiliate) {
+      return NextResponse.json({ error: 'Affiliate not found' }, { status: 404 })
+    }
+    if (affiliate.status === 'INACTIVE') {
+      return NextResponse.json({ error: 'Cannot create deals for inactive affiliates' }, { status: 400 })
+    }
 
     // Create the deal
     const { data: deal, error: dealError } = await supabase

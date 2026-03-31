@@ -205,14 +205,15 @@ export default function RebateStructure({ levels = [], onChange, affiliates = []
                         <div>
                           <Label className="text-xs">Assign IB / Affiliate</Label>
                           <Select
-                            value={level.affiliate_id || ''}
-                            onValueChange={(val) => handleFieldChange(level.level_number, 'affiliate_id', val || null)}
+                            value={level.affiliate_id || 'unassigned'}
+                            onValueChange={(val) => handleFieldChange(level.level_number, 'affiliate_id', val === 'unassigned' ? null : val)}
                             disabled={readOnly}
                           >
                             <SelectTrigger className="h-8 text-sm">
                               <SelectValue placeholder="Select affiliate..." />
                             </SelectTrigger>
                             <SelectContent>
+                              <SelectItem value="unassigned">Unassigned</SelectItem>
                               {affiliates.map((a) => (
                                 <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                               ))}

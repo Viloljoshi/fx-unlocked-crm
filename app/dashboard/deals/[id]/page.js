@@ -33,8 +33,8 @@ export default function DealDetailPage({ params }) {
     fetchAffiliates()
   }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function fetchDeal() {
-    setLoading(true)
+  async function fetchDeal(showLoader = true) {
+    if (showLoader) setLoading(true)
     try {
       const res = await fetch(`/api/deals/${id}`)
       const data = await res.json()
@@ -44,7 +44,7 @@ export default function DealDetailPage({ params }) {
       console.error('Error fetching deal:', err)
       toast.error('Failed to load deal')
     } finally {
-      setLoading(false)
+      if (showLoader) setLoading(false)
     }
   }
 
@@ -60,7 +60,7 @@ export default function DealDetailPage({ params }) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       toast.success(data.message)
-      fetchDeal()
+      fetchDeal(false)
     } catch (err) {
       toast.error(err.message || 'Failed to send deal')
     } finally {
@@ -78,7 +78,7 @@ export default function DealDetailPage({ params }) {
     if (!res.ok) throw new Error(data.error)
     toast.success('Deal updated successfully')
     setEditing(false)
-    fetchDeal()
+    fetchDeal(false)
   }
 
   function handleNoteAdded(note) {

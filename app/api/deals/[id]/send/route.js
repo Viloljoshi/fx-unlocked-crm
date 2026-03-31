@@ -4,6 +4,8 @@ import { createAdminClient, getAuthUser } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email/resend'
 import { dealApprovalEmailHtml } from '@/lib/email/templates/deal-approval'
 
+export const dynamic = 'force-dynamic'
+
 // POST /api/deals/[id]/send — send deal for approval
 export async function POST(request, { params }) {
   try {
@@ -45,7 +47,7 @@ export async function POST(request, { params }) {
         .eq('id', deal.affiliate.manager_id)
         .single()
 
-      if (manager) recipientEmail = manager.email
+      if (manager?.email) recipientEmail = manager.email
     }
 
     // Fallback: get all admins if no manager assigned
@@ -86,9 +88,10 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Failed to create approval token' }, { status: 500 })
     }
 
-    // Build approval URL
+    // Build approval/rejection URLs
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
     const approveUrl = `${baseUrl}/deals/approve?token=${token}`
+    const rejectUrl = `${baseUrl}/deals/approve?token=${token}&action=reject`
 
     // Send email
     const html = dealApprovalEmailHtml({
@@ -97,6 +100,7 @@ export async function POST(request, { params }) {
       broker: deal.broker,
       levels: deal.deal_levels,
       approveUrl,
+      rejectUrl,
     })
 
     await sendEmail({

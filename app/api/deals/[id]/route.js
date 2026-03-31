@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient, getAuthUser } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/deals/[id] — get single deal with all relations
 export async function GET(request, { params }) {
   try {
@@ -10,17 +12,14 @@ export async function GET(request, { params }) {
     const { id } = await params
     const supabase = createAdminClient()
 
+    // Fetch deal + relations separately to avoid FK name issues
     const { data: deal, error } = await supabase
       .from('deals')
       .select(`
         *,
         affiliate:affiliates(id, name, email, status, phone, country),
         broker:brokers(id, name),
-        creator:profiles!deals_created_by_fkey(id, first_name, last_name, email),
-        approver:profiles!deals_approved_by_fkey(id, first_name, last_name, email),
-        deal_levels(*),
-        deal_notes(*, user:profiles(id, first_name, last_name)),
-        deal_versions(*, changer:profiles!deal_versions_changed_by_fkey(id, first_name, last_name))
+        deal_levels(*)
       `)
       .eq('id', id)
       .single()
@@ -30,15 +29,45 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: error.message }, { status: 404 })
     }
 
-    // Sort nested data
+    // Fetch creator profile
+    if (deal.created_by) {
+      const { data: creator } = await supabase.from('profiles').select('id, first_name, last_name, email').eq('id', deal.created_by).single()
+      deal.creator = creator
+    }
+
+    // Fetch approver profile
+    if (deal.approved_by) {
+      const { data: approver } = await supabase.from('profiles').select('id, first_name, last_name, email').eq('id', deal.approved_by).single()
+      deal.approver = approver
+    }
+
+    // Fetch notes with user info
+    const { data: notes } = await supabase.from('deal_notes').select('*').eq('deal_id', id).order('created_at', { ascending: false })
+    if (notes) {
+      for (const note of notes) {
+        if (note.user_id) {
+          const { data: noteUser } = await supabase.from('profiles').select('id, first_name, last_name').eq('id', note.user_id).single()
+          note.user = noteUser
+        }
+      }
+    }
+    deal.deal_notes = notes || []
+
+    // Fetch versions with changer info
+    const { data: versions } = await supabase.from('deal_versions').select('*').eq('deal_id', id).order('version_number', { ascending: false })
+    if (versions) {
+      for (const ver of versions) {
+        if (ver.changed_by) {
+          const { data: changer } = await supabase.from('profiles').select('id, first_name, last_name').eq('id', ver.changed_by).single()
+          ver.changer = changer
+        }
+      }
+    }
+    deal.deal_versions = versions || []
+
+    // Sort levels
     if (deal.deal_levels) {
       deal.deal_levels.sort((a, b) => a.level_number - b.level_number)
-    }
-    if (deal.deal_notes) {
-      deal.deal_notes.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-    }
-    if (deal.deal_versions) {
-      deal.deal_versions.sort((a, b) => b.version_number - a.version_number)
     }
 
     return NextResponse.json({ deal })

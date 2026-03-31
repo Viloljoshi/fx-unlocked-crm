@@ -177,7 +177,7 @@ export default function DealForm({ deal, onSave, onCancel, mode = 'create' }) {
             <DealTypeFields
               dealType={dealType}
               dealData={dealDetails?.deal || {}}
-              setDealData={(data) => setDealDetails((prev) => ({ ...prev, deal: typeof data === 'function' ? data(prev?.deal || {}) : data }))}
+              onChange={(data) => setDealDetails((prev) => ({ ...prev, deal: data }))}
             />
           </CardContent>
         </Card>

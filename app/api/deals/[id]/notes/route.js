@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient, getAuthUser } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 // POST /api/deals/[id]/notes — add note to deal
 export async function POST(request, { params }) {
   try {
