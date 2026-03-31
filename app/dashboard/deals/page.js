@@ -4,24 +4,37 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { useUserRole } from '@/lib/hooks/useUserRole'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Search, Handshake } from 'lucide-react'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { Plus, Search, Handshake, Trash2, FileCheck, Clock, FileEdit, CheckCircle2, XCircle, Archive } from 'lucide-react'
 import DealStatusBadge from '@/components/deals/DealStatusBadge'
+
+const statCards = [
+  { key: 'total', label: 'Total Deals', icon: Handshake, color: 'text-foreground' },
+  { key: 'DRAFT', label: 'Draft', icon: FileEdit, color: 'text-gray-500' },
+  { key: 'PENDING', label: 'Pending', icon: Clock, color: 'text-yellow-600' },
+  { key: 'ACTIVE', label: 'Active', icon: CheckCircle2, color: 'text-green-600' },
+  { key: 'REJECTED', label: 'Rejected', icon: XCircle, color: 'text-red-500' },
+]
 
 export default function DealsPage() {
   const router = useRouter()
   const supabase = createClient()
+  const { isAdmin } = useUserRole()
 
   const [deals, setDeals] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [dealTypeFilter, setDealTypeFilter] = useState('ALL')
+  const [deleteDeal, setDeleteDeal] = useState(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     fetchDeals()
@@ -30,7 +43,7 @@ export default function DealsPage() {
   async function fetchDeals() {
     setLoading(true)
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('deals')
         .select(`
           *,
@@ -39,7 +52,6 @@ export default function DealsPage() {
         `)
         .order('created_at', { ascending: false })
 
-      const { data, error } = await query
       if (error) throw error
       setDeals(data || [])
     } catch (err) {
@@ -48,6 +60,33 @@ export default function DealsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function handleDelete(dealId) {
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/deals/${dealId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to delete deal')
+      }
+      toast.success('Deal deleted')
+      setDeleteDeal(null)
+      fetchDeals()
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  // Stats
+  const stats = {
+    total: deals.length,
+    DRAFT: deals.filter((d) => d.status === 'DRAFT').length,
+    PENDING: deals.filter((d) => d.status === 'PENDING').length,
+    ACTIVE: deals.filter((d) => d.status === 'ACTIVE').length,
+    REJECTED: deals.filter((d) => d.status === 'REJECTED').length,
   }
 
   // Client-side filtering
@@ -81,6 +120,29 @@ export default function DealsPage() {
           New Deal
         </Button>
       </div>
+
+      {/* Stats Dashboard */}
+      {!loading && deals.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {statCards.map(({ key, label, icon: Icon, color }) => (
+            <Card
+              key={key}
+              className={`cursor-pointer transition-all hover:shadow-md ${statusFilter === key ? 'ring-2 ring-primary' : ''}`}
+              onClick={() => setStatusFilter(statusFilter === key ? 'ALL' : key === 'total' ? 'ALL' : key)}
+            >
+              <CardContent className="pt-4 pb-3 px-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">{label}</p>
+                    <p className={`text-2xl font-bold ${color}`}>{stats[key]}</p>
+                  </div>
+                  <Icon className={`w-5 h-5 ${color} opacity-60`} />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Filters */}
       <Card>
@@ -154,6 +216,7 @@ export default function DealsPage() {
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead>Last Updated</TableHead>
+                  {isAdmin && <TableHead className="w-[50px]"></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -184,6 +247,18 @@ export default function DealsPage() {
                     <TableCell className="text-sm text-muted-foreground">
                       {new Date(deal.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </TableCell>
+                    {isAdmin && (
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={(e) => { e.stopPropagation(); setDeleteDeal(deal) }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -191,6 +266,24 @@ export default function DealsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteDeal} onOpenChange={() => setDeleteDeal(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete deal for {deleteDeal?.affiliate?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this deal and all associated rebate levels, notes, versions, and approval tokens. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => handleDelete(deleteDeal.id)} disabled={deleting} className="bg-destructive hover:bg-destructive/90">
+              {deleting ? 'Deleting...' : 'Delete Deal'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

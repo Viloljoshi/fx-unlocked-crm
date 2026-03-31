@@ -202,3 +202,48 @@ export async function PUT(request, { params }) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
+
+// DELETE /api/deals/[id] — delete a deal (ADMIN only)
+export async function DELETE(request, { params }) {
+  try {
+    const { user, role } = await getAuthUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Only admins can delete deals' }, { status: 403 })
+    }
+
+    const { id } = params
+    const supabase = createAdminClient()
+
+    const { data: deal, error: fetchErr } = await supabase
+      .from('deals')
+      .select('id, status, affiliate_id')
+      .eq('id', id)
+      .single()
+
+    if (fetchErr || !deal) {
+      return NextResponse.json({ error: 'Deal not found' }, { status: 404 })
+    }
+
+    // CASCADE deletes levels, notes, versions, tokens
+    const { error: delErr } = await supabase.from('deals').delete().eq('id', id)
+
+    if (delErr) {
+      return NextResponse.json({ error: delErr.message }, { status: 500 })
+    }
+
+    // Audit log
+    await supabase.from('audit_logs').insert({
+      user_id: user.id,
+      action: 'DELETE',
+      entity_type: 'DEAL',
+      entity_id: id,
+      changes: { status: deal.status, affiliate_id: deal.affiliate_id },
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error('Deal DELETE error:', err)
+    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 })
+  }
+}
