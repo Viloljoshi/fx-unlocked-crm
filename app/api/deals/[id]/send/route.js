@@ -55,22 +55,15 @@ export async function POST(request, { params }) {
       }
     }
 
-    if (!recipientEmail) {
-      const { data: admins } = await supabase
-        .from('profiles')
-        .select('email, first_name, last_name')
-        .eq('role', 'ADMIN')
-        .limit(1)
-
-      if (admins?.[0]?.email) {
-        recipientEmail = admins[0].email
-        recipientName = `${admins[0].first_name || ''} ${admins[0].last_name || ''}`.trim()
-      }
-    }
-
-    // Final fallback: current user's email
+    // Fallback: current logged-in user's email (they're requesting approval)
     if (!recipientEmail) {
       recipientEmail = user.email
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('first_name, last_name')
+        .eq('id', user.id)
+        .single()
+      if (profile) recipientName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
     }
 
     if (!recipientEmail) {
