@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/deals/approve?token=xxx — public approval endpoint (no auth required)
 export async function GET(request) {
   try {
