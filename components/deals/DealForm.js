@@ -124,12 +124,12 @@ export default function DealForm({ deal, onSave, onCancel, mode = 'create' }) {
 
             <div>
               <Label>Broker</Label>
-              <Select value={brokerId} onValueChange={setBrokerId}>
+              <Select value={brokerId || 'none'} onValueChange={(val) => setBrokerId(val === 'none' ? '' : val)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select broker..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No broker</SelectItem>
+                  <SelectItem value="none">No broker</SelectItem>
                   {brokers.map((b) => (
                     <SelectItem key={b.id} value={b.id}>
                       {b.name}
