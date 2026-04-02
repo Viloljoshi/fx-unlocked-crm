@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
-import { UserPlus, Users, Mail, Trash2, KeyRound, Eye, EyeOff, ShieldAlert, Pencil } from 'lucide-react'
+import { UserPlus, Users, Mail, Trash2, KeyRound, ShieldAlert, Pencil } from 'lucide-react'
 import { useUserRole } from '@/lib/hooks/useUserRole'
 
 const CURRENCIES = ['USD', 'GBP', 'EUR', 'AUD', 'CAD', 'NZD']
@@ -28,8 +28,6 @@ export default function UsersPage() {
   const [inviteRole, setInviteRole] = useState('STAFF')
   const [inviteFirstName, setInviteFirstName] = useState('')
   const [inviteLastName, setInviteLastName] = useState('')
-  const [invitePassword, setInvitePassword] = useState('')
-  const [showInvitePassword, setShowInvitePassword] = useState(false)
   const [inviting, setInviting] = useState(false)
   const [inviteSent, setInviteSent] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -72,7 +70,6 @@ export default function UsersPage() {
           role: inviteRole,
           firstName: inviteFirstName,
           lastName: inviteLastName,
-          password: invitePassword,
         }),
       })
       const data = await res.json()
@@ -93,8 +90,6 @@ export default function UsersPage() {
     setInviteFirstName('')
     setInviteLastName('')
     setInviteRole('STAFF')
-    setInvitePassword('')
-    setShowInvitePassword(false)
     setInviteSent(false)
   }
 
@@ -170,13 +165,14 @@ export default function UsersPage() {
   const sendPasswordReset = async (email) => {
     if (!email) { toast.error('No email address for this user'); return }
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+      await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
       })
-      if (error) throw error
       toast.success(`Password reset email sent to ${email}`)
-    } catch (err) {
-      toast.error(err.message || 'Failed to send reset email')
+    } catch {
+      toast.error('Failed to send reset email')
     }
   }
 
@@ -419,12 +415,12 @@ export default function UsersPage() {
               </div>
               <h3 className="font-semibold text-lg">User Created!</h3>
               <p className="text-sm text-muted-foreground">
-                An invite email was sent to <strong>{inviteEmail}</strong>.<br />
-                They can log in now with the password you set, or use the link in the invite email.
+                A branded invite email was sent to <strong>{inviteEmail}</strong>.<br />
+                They&apos;ll receive a secure link to set their own password and access their account.
               </p>
               <div className="flex gap-2 justify-center pt-2">
                 <Button variant="outline" onClick={resetInviteForm}>Close</Button>
-                <Button onClick={() => { setInviteSent(false); setInviteEmail(''); setInviteFirstName(''); setInviteLastName(''); setInvitePassword('') }}>
+                <Button onClick={() => { setInviteSent(false); setInviteEmail(''); setInviteFirstName(''); setInviteLastName('') }}>
                   Create Another
                 </Button>
               </div>
@@ -447,25 +443,6 @@ export default function UsersPage() {
                   placeholder="user@company.com" type="email" />
               </div>
               <div className="space-y-1.5">
-                <Label>Initial Password <span className="text-destructive">*</span></Label>
-                <div className="relative">
-                  <Input
-                    type={showInvitePassword ? 'text' : 'password'}
-                    value={invitePassword}
-                    onChange={e => setInvitePassword(e.target.value)}
-                    placeholder="Min. 6 characters"
-                    minLength={6}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowInvitePassword(!showInvitePassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showInvitePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-1.5">
                 <Label>Role</Label>
                 <Select value={inviteRole} onValueChange={setInviteRole}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -477,11 +454,11 @@ export default function UsersPage() {
                 </Select>
               </div>
               <div className="bg-muted/50 rounded-lg p-3 text-xs text-muted-foreground">
-                <strong>How it works:</strong> The user is created immediately with the password you set — they can log in right away. An invite email is also sent so they can reset their password anytime.
+                <strong>How it works:</strong> A branded invite email is sent to the user with a secure one-time link. They click it, set their own password, and get instant access. You never handle their password.
               </div>
               <div className="flex gap-2 justify-end pt-1">
                 <Button variant="outline" onClick={resetInviteForm}>Cancel</Button>
-                <Button onClick={inviteUser} disabled={inviting || !invitePassword || invitePassword.length < 6}>
+                <Button onClick={inviteUser} disabled={inviting}>
                   <UserPlus className="w-4 h-4 mr-2" />
                   {inviting ? 'Creating...' : 'Create User'}
                 </Button>

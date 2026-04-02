@@ -311,11 +311,34 @@ export default function AffiliatesPage() {
       savedId = ins?.id
     }
     if (error) { toast.error(error.message); setSaving(false); return }
+
     // Sync affiliate_brokers junction table
     await supabase.from('affiliate_brokers').delete().eq('affiliate_id', savedId)
     if (brokerIds.length > 0) {
       await supabase.from('affiliate_brokers').insert(brokerIds.map(bid => ({ affiliate_id: savedId, broker_id: bid })))
     }
+
+    // Send status-change email to the affiliate if status changed (or new affiliate with a notifiable status)
+    const prevStatus = editTarget?.status
+    const newStatus = payload.status
+    const notifiableStatuses = ['ACTIVE', 'ONBOARDING', 'INACTIVE']
+    if (notifiableStatuses.includes(newStatus) && newStatus !== prevStatus) {
+      // Fetch broker names for the approved email (non-blocking — don't await)
+      const brokerNames = brokerIds.length > 0
+        ? (await supabase.from('brokers').select('name').in('id', brokerIds)).data?.map(b => b.name).join(', ')
+        : null
+      fetch('/api/affiliates/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: payload.email,
+          name: payload.name,
+          status: newStatus,
+          brokers: brokerNames,
+        }),
+      }).catch(err => console.error('Affiliate notify (non-fatal):', err))
+    }
+
     toast.success(editTarget ? 'Affiliate updated' : 'Affiliate added successfully')
     setAddOpen(false)
     setForm(EMPTY_FORM)
