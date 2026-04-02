@@ -1,70 +1,32 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { UserProvider, useUser } from '@/lib/context/UserContext'
 import Sidebar from '@/components/layout/Sidebar'
 import TopBar from '@/components/layout/TopBar'
 import CommandBar from '@/components/command-bar/CommandBar'
 import AIChat from '@/components/chat/AIChat'
 import TutorialOverlay from '@/components/ui/TutorialOverlay'
 
-export default function DashboardLayout({ children }) {
+// Inner layout reads from UserContext — no additional auth/DB calls
+function DashboardInner({ children }) {
+  const { user, profile, loading, refetchProfile } = useUser()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [commandBarOpen, setCommandBarOpen] = useState(false)
   const [aiChatOpen, setAiChatOpen] = useState(false)
-  const [profile, setProfile] = useState(null)
-  const [user, setUser] = useState(null)
-  const [showTutorial, setShowTutorial] = useState(false)
   const supabase = createClient()
 
-  useEffect(() => {
-    const loadProfile = async () => {
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      if (!authUser) return
-      setUser(authUser)
-
-      const { data: profileData, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authUser.id)
-        .single()
-
-      if (error && error.code === 'PGRST116') {
-        // Profile doesn't exist — create it (first-time user)
-        const { data: newProfile } = await supabase
-          .from('profiles')
-          .insert({
-            id: authUser.id,
-            email: authUser.email || '',
-            first_name: authUser.user_metadata?.first_name || '',
-            last_name: authUser.user_metadata?.last_name || '',
-            role: authUser.user_metadata?.role || 'STAFF',
-            is_active: true,
-          })
-          .select()
-          .single()
-        setProfile(newProfile)
-        // Brand-new profile has no onboarded_at — show tutorial
-        setShowTutorial(true)
-      } else {
-        setProfile(profileData)
-        // Existing user who hasn't completed onboarding
-        if (profileData && profileData.onboarded_at === null) {
-          setShowTutorial(true)
-        }
-      }
-    }
-    loadProfile()
-  }, [])
+  const showTutorial = !loading && profile && profile.onboarded_at === null
 
   const handleTutorialComplete = async () => {
-    setShowTutorial(false)
     if (!user) return
     await supabase
       .from('profiles')
       .update({ onboarded_at: new Date().toISOString() })
       .eq('id', user.id)
+    await refetchProfile()
   }
 
   return (
@@ -91,5 +53,14 @@ export default function DashboardLayout({ children }) {
       <AIChat open={aiChatOpen} setOpen={setAiChatOpen} />
       {showTutorial && <TutorialOverlay onComplete={handleTutorialComplete} />}
     </div>
+  )
+}
+
+// UserProvider wraps everything — one auth + one DB call for the entire session
+export default function DashboardLayout({ children }) {
+  return (
+    <UserProvider>
+      <DashboardInner>{children}</DashboardInner>
+    </UserProvider>
   )
 }
