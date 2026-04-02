@@ -21,44 +21,32 @@ export async function middleware(request) {
     }
   )
 
-  const pathname = request.nextUrl.pathname
-  const isDashboard = pathname.startsWith('/dashboard')
-  const isAuthPage = pathname === '/login' || pathname === '/set-password' || pathname === '/reset-password'
-  const isMfaPage = pathname.startsWith('/verify-mfa') || pathname.startsWith('/setup-mfa')
-
-  // Skip middleware logic for pages that don't need auth checks
-  if (!isDashboard && !isAuthPage && !isMfaPage) {
-    return supabaseResponse
-  }
-
-  // getUser() validates the session server-side (secure)
+  // IMPORTANT: getUser() must be called on every request so Supabase can
+  // refresh the session token and write the updated cookie to the response.
+  // Do NOT add early returns before this call or session refresh breaks.
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Not logged in — redirect to login
-  if (!user && isDashboard) {
+  const pathname = request.nextUrl.pathname
+
+  // Not logged in → send to login
+  if (!user && pathname.startsWith('/dashboard')) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
   if (user) {
-    // Already logged in — don't show login/set-password
-    if (isAuthPage) {
+    // Already logged in → skip login/auth pages
+    if (pathname === '/login' || pathname === '/reset-password') {
       const url = request.nextUrl.clone()
       url.pathname = '/dashboard'
       return NextResponse.redirect(url)
     }
 
-    // Only check MFA level when accessing the dashboard (not on every route)
-    if (isDashboard || isMfaPage) {
+    // MFA check — only for dashboard routes to avoid extra auth calls on every page
+    if (pathname.startsWith('/dashboard')) {
       const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-
-      // MFA enrolled but not verified this session → force verify
-      if (
-        aal?.nextLevel === 'aal2' &&
-        aal?.currentLevel !== 'aal2' &&
-        !isMfaPage
-      ) {
+      if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
         const url = request.nextUrl.clone()
         url.pathname = '/verify-mfa'
         return NextResponse.redirect(url)
