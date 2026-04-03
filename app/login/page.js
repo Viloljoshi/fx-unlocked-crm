@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -10,10 +10,9 @@ import { toast } from 'sonner'
 import { Eye, EyeOff, ArrowLeft, CheckCircle2 } from 'lucide-react'
 import Logo from '@/components/ui/Logo'
 
-export default function LoginPage() {
-  const [mode, setMode] = useState('login') // 'login' | 'forgot'
+// Separated so useSearchParams() is inside a Suspense boundary (Next.js requirement)
+function AuthErrorToast() {
   const searchParams = useSearchParams()
-
   useEffect(() => {
     const error = searchParams.get('error')
     if (error === 'unauthorized_domain') {
@@ -22,6 +21,11 @@ export default function LoginPage() {
       toast.error('Authentication failed. Please try again.')
     }
   }, [searchParams])
+  return null
+}
+
+export default function LoginPage() {
+  const [mode, setMode] = useState('login') // 'login' | 'forgot'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -106,6 +110,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-[#f0f4f8] flex flex-col items-center justify-center p-4">
+      <Suspense fallback={null}><AuthErrorToast /></Suspense>
 
       {/* Brand mark above card */}
       <div className="flex flex-col items-center mb-7">
