@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,6 +12,16 @@ import Logo from '@/components/ui/Logo'
 
 export default function LoginPage() {
   const [mode, setMode] = useState('login') // 'login' | 'forgot'
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const error = searchParams.get('error')
+    if (error === 'unauthorized_domain') {
+      toast.error('Access denied. Only @fx-unlocked.com accounts or admins can sign in with Google.')
+    } else if (error === 'auth') {
+      toast.error('Authentication failed. Please try again.')
+    }
+  }, [searchParams])
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)

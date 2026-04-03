@@ -32,6 +32,30 @@ export async function GET(request) {
         return NextResponse.redirect(`${origin}/reset-password`)
       }
 
+      // --- Google OAuth domain restriction ---
+      // Only @fx-unlocked.com emails OR admins can sign in via Google
+      const { data: { user } } = await supabase.auth.getUser()
+      const email = user?.email ?? ''
+      const isCompanyEmail = email.endsWith('@fx-unlocked.com')
+
+      if (!isCompanyEmail) {
+        // Check if this user is an admin in our DB
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+
+        const isAdmin = profile?.role === 'ADMIN'
+
+        if (!isAdmin) {
+          // Not company email, not admin → sign out and block
+          await supabase.auth.signOut()
+          return NextResponse.redirect(`${origin}/login?error=unauthorized_domain`)
+        }
+      }
+      // ----------------------------------------
+
       // Check MFA status post-login
       const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
 
