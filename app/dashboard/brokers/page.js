@@ -10,17 +10,28 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
-import { Search, Plus, Building2, Download, Trash2, Pencil } from 'lucide-react'
+import { Search, Plus, Building2, Download, Trash2, Pencil, Link } from 'lucide-react'
 import { useUserRole } from '@/lib/hooks/useUserRole'
+
+const DEAL_TYPE_OPTIONS = ['CPA', 'PNL', 'HYBRID', 'REBATES']
 
 const EMPTY_FORM = {
   name: '', account_manager: '', contact_email: '', contact_phone: '',
-  deal_types: '', notes: '', is_active: true
+  deal_types: '', deal_notes: '', notes: '', referral_link_1: '', referral_link_2: '', is_active: true
+}
+
+// Parse comma-separated deal_types string into an array
+function parseDealTypes(str) {
+  return (str || '').split(',').map(s => s.trim()).filter(Boolean)
+}
+
+// Serialize array back to comma-separated string
+function serializeDealTypes(arr) {
+  return arr.join(',')
 }
 
 export default function BrokersPage() {
@@ -33,6 +44,7 @@ export default function BrokersPage() {
   const [addOpen, setAddOpen] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
+  const [selectedDealTypes, setSelectedDealTypes] = useState([])
   const [saving, setSaving] = useState(false)
   const [selected, setSelected] = useState(new Set())
   const [deleteConfirm, setDeleteConfirm] = useState(false)
@@ -64,17 +76,48 @@ export default function BrokersPage() {
     return true
   })
 
-  const openAdd = () => { setEditTarget(null); setForm(EMPTY_FORM); setAddOpen(true) }
-  const openEdit = (b, e) => { e.stopPropagation(); setEditTarget(b); setForm({ name: b.name, account_manager: b.account_manager || '', contact_email: b.contact_email || '', contact_phone: b.contact_phone || '', deal_types: b.deal_types || '', notes: b.notes || '', is_active: b.is_active !== false }); setAddOpen(true) }
+  const openAdd = () => {
+    setEditTarget(null)
+    setForm(EMPTY_FORM)
+    setSelectedDealTypes([])
+    setAddOpen(true)
+  }
+
+  const openEdit = (b, e) => {
+    e.stopPropagation()
+    setEditTarget(b)
+    setForm({
+      name: b.name,
+      account_manager: b.account_manager || '',
+      contact_email: b.contact_email || '',
+      contact_phone: b.contact_phone || '',
+      deal_types: b.deal_types || '',
+      deal_notes: b.deal_notes || '',
+      notes: b.notes || '',
+      referral_link_1: b.referral_link_1 || '',
+      referral_link_2: b.referral_link_2 || '',
+      is_active: b.is_active !== false,
+    })
+    setSelectedDealTypes(parseDealTypes(b.deal_types))
+    setAddOpen(true)
+  }
+
+  const toggleDealType = (type) => {
+    setSelectedDealTypes(prev => {
+      const next = prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
+      return next
+    })
+  }
 
   const handleSave = async () => {
     if (!form.name) { toast.error('Broker name is required'); return }
     setSaving(true)
+    const payload = { ...form, deal_types: serializeDealTypes(selectedDealTypes) }
     let error
     if (editTarget) {
-      ({ error } = await supabase.from('brokers').update(form).eq('id', editTarget.id))
+      ({ error } = await supabase.from('brokers').update(payload).eq('id', editTarget.id))
     } else {
-      ({ error } = await supabase.from('brokers').insert(form))
+      ({ error } = await supabase.from('brokers').insert(payload))
     }
     if (error) { toast.error(error.message); setSaving(false); return }
     toast.success(editTarget ? 'Broker updated' : 'Broker added')
@@ -96,7 +139,7 @@ export default function BrokersPage() {
     const toExport = selected.size > 0 ? filtered.filter(b => selected.has(b.id)) : filtered
     const headers = ['Name', 'Account Manager', 'Contact Email', 'Deal Types', 'Affiliates', 'Revenue', 'Status']
     const rows = toExport.map(b => [b.name, b.account_manager || '', b.contact_email || '', b.deal_types || '', affiliateCounts[b.id] || 0, revenueTotals[b.id] || 0, b.is_active ? 'Active' : 'Inactive'])
-    const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n')
+    const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a'); a.href = url; a.download = 'brokers.csv'; a.click(); URL.revokeObjectURL(url)
@@ -130,8 +173,8 @@ export default function BrokersPage() {
               <Input placeholder="Search brokers..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
             </div>
             <div className="flex border rounded-lg overflow-hidden">
-              {['all','active','inactive'].map(s => (
-                <button key={s} onClick={() => setStatusFilter(s)} className={`px-3 py-2 text-sm font-medium capitalize transition-colors ${ statusFilter === s ? 'bg-primary text-primary-foreground' : 'hover:bg-muted' }`}>{s}</button>
+              {['all', 'active', 'inactive'].map(s => (
+                <button key={s} onClick={() => setStatusFilter(s)} className={`px-3 py-2 text-sm font-medium capitalize transition-colors ${statusFilter === s ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>{s}</button>
               ))}
             </div>
           </div>
@@ -162,9 +205,9 @@ export default function BrokersPage() {
                     <TableCell className="font-medium">{b.name}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{b.account_manager || '-'}</TableCell>
                     <TableCell className="text-muted-foreground text-xs">{b.contact_email || '-'}</TableCell>
-                    <TableCell><div className="flex flex-wrap gap-1">{(b.deal_types||'').split(',').filter(Boolean).map(dt => <Badge key={dt} variant="outline" className="text-xs">{dt.trim()}</Badge>)}</div></TableCell>
+                    <TableCell><div className="flex flex-wrap gap-1">{parseDealTypes(b.deal_types).map(dt => <Badge key={dt} variant="outline" className="text-xs">{dt}</Badge>)}</div></TableCell>
                     <TableCell className="font-medium">{affiliateCounts[b.id] || 0}</TableCell>
-                    <TableCell className="font-medium text-green-600">${(revenueTotals[b.id]||0).toLocaleString()}</TableCell>
+                    <TableCell className="font-medium text-green-600">${(revenueTotals[b.id] || 0).toLocaleString()}</TableCell>
                     <TableCell><Badge className={b.is_active ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}>{b.is_active ? 'Active' : 'Inactive'}</Badge></TableCell>
                     {isAdmin && <TableCell onClick={e => e.stopPropagation()}><Button variant="ghost" size="icon" className="h-7 w-7" onClick={e => openEdit(b, e)}><Pencil className="w-3.5 h-3.5" /></Button></TableCell>}
                   </TableRow>
@@ -177,30 +220,119 @@ export default function BrokersPage() {
 
       {/* Add / Edit Modal */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Building2 className="w-4 h-4" /> {editTarget ? 'Edit Broker' : 'Add New Broker'}</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="w-4 h-4" /> {editTarget ? 'Edit Broker' : 'Add New Broker'}
+            </DialogTitle>
+          </DialogHeader>
           <div className="space-y-4 pt-2">
-            <div className="space-y-1.5"><Label>Broker Name <span className="text-destructive">*</span></Label><Input value={form.name} onChange={e => setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. IC Markets" /></div>
+
+            {/* Broker Name */}
+            <div className="space-y-1.5">
+              <Label>Broker Name <span className="text-destructive">*</span></Label>
+              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. IC Markets" />
+            </div>
+
+            {/* Account Manager + Contact Email */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5"><Label>Account Manager</Label><Input value={form.account_manager} onChange={e => setForm(f=>({...f,account_manager:e.target.value}))} /></div>
-              <div className="space-y-1.5"><Label>Contact Email</Label><Input value={form.contact_email} onChange={e => setForm(f=>({...f,contact_email:e.target.value}))} type="email" /></div>
-              <div className="space-y-1.5"><Label>Contact Phone</Label><Input value={form.contact_phone} onChange={e => setForm(f=>({...f,contact_phone:e.target.value}))} /></div>
-              <div className="space-y-1.5"><Label>Deal Type</Label>
-                <Select value={form.deal_types} onValueChange={v => setForm(f=>({...f, deal_types: v}))}>
-                  <SelectTrigger><SelectValue placeholder="Select deal type" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="CPA">CPA</SelectItem>
-                    <SelectItem value="PNL">PNL</SelectItem>
-                    <SelectItem value="HYBRID">HYBRID</SelectItem>
-                    <SelectItem value="REBATES">REBATES</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="space-y-1.5">
+                <Label>Account Manager</Label>
+                <Input value={form.account_manager} onChange={e => setForm(f => ({ ...f, account_manager: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Contact Email</Label>
+                <Input value={form.contact_email} onChange={e => setForm(f => ({ ...f, contact_email: e.target.value }))} type="email" />
               </div>
             </div>
-            <div className="space-y-1.5"><Label>Notes</Label><Input value={form.notes} onChange={e => setForm(f=>({...f,notes:e.target.value}))} /></div>
-            <div className="flex items-center gap-3"><Switch checked={form.is_active} onCheckedChange={v=>setForm(f=>({...f,is_active:v}))} /><Label>Active Broker</Label></div>
+
+            {/* Contact Phone */}
+            <div className="space-y-1.5">
+              <Label>Contact Phone</Label>
+              <Input value={form.contact_phone} onChange={e => setForm(f => ({ ...f, contact_phone: e.target.value }))} />
+            </div>
+
+            {/* Deal Types — multi-select checkboxes */}
+            <div className="space-y-2">
+              <Label>Deal Types</Label>
+              <div className="flex flex-wrap gap-2">
+                {DEAL_TYPE_OPTIONS.map(type => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => toggleDealType(type)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                      selectedDealTypes.includes(type)
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+              {selectedDealTypes.length === 0 && (
+                <p className="text-xs text-muted-foreground">Select one or more deal types</p>
+              )}
+            </div>
+
+            {/* Deal Notes */}
+            <div className="space-y-1.5">
+              <Label>Deal Notes</Label>
+              <textarea
+                value={form.deal_notes}
+                onChange={e => setForm(f => ({ ...f, deal_notes: e.target.value }))}
+                placeholder="e.g. 30% rev share on all CPA deals, minimum 50 lots/month..."
+                rows={3}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              />
+            </div>
+
+            {/* Referral Links */}
+            <div className="space-y-3">
+              <Label className="flex items-center gap-1.5"><Link className="w-3.5 h-3.5" /> Referral Links</Label>
+              <div className="space-y-2">
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground font-medium">Referral Link 1</p>
+                  <Input
+                    value={form.referral_link_1}
+                    onChange={e => setForm(f => ({ ...f, referral_link_1: e.target.value }))}
+                    placeholder="https://broker.com/ref/link1"
+                    type="url"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground font-medium">Referral Link 2</p>
+                  <Input
+                    value={form.referral_link_2}
+                    onChange={e => setForm(f => ({ ...f, referral_link_2: e.target.value }))}
+                    placeholder="https://broker.com/ref/link2"
+                    type="url"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* General Notes */}
+            <div className="space-y-1.5">
+              <Label>Notes</Label>
+              <textarea
+                value={form.notes}
+                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="General broker notes..."
+                rows={2}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              />
+            </div>
+
+            {/* Active toggle */}
+            <div className="flex items-center gap-3">
+              <Switch checked={form.is_active} onCheckedChange={v => setForm(f => ({ ...f, is_active: v }))} />
+              <Label>Active Broker</Label>
+            </div>
+
             <div className="flex gap-2 justify-end pt-2">
-              <Button variant="outline" onClick={()=>setAddOpen(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
               <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : (editTarget ? 'Save Changes' : 'Add Broker')}</Button>
             </div>
           </div>
