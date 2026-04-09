@@ -42,18 +42,24 @@ export async function POST(request) {
       }, { onConflict: 'id' })
     }
 
-    // Send branded invite email via Resend
-    await sendInviteEmail({
-      to: email,
-      firstName,
-      lastName,
-      role,
-      inviteUrl: data.properties.action_link,
-    })
+    const inviteUrl = data.properties.action_link
+
+    // Send branded invite email via Resend — non-blocking, email failure does NOT block user creation
+    let emailWarning = null
+    try {
+      await sendInviteEmail({ to: email, firstName, lastName, role, inviteUrl })
+    } catch (emailErr) {
+      console.error('Invite email failed (user was still created):', emailErr.message)
+      emailWarning = `User created but invite email failed to send. Share this link manually: ${inviteUrl}`
+    }
 
     return NextResponse.json({
       success: true,
-      message: `Invite sent to ${email}. They'll receive a branded email with a secure link to set their password.`,
+      inviteUrl,
+      message: emailWarning
+        ? `User created. Invite email failed — share the invite link manually with ${email}.`
+        : `Invite sent to ${email}. They'll receive a branded email with a secure link to set their password.`,
+      emailWarning,
     })
   } catch (err) {
     console.error('Create user error:', err)

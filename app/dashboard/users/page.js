@@ -30,6 +30,7 @@ export default function UsersPage() {
   const [inviteLastName, setInviteLastName] = useState('')
   const [inviting, setInviting] = useState(false)
   const [inviteSent, setInviteSent] = useState(false)
+  const [inviteLink, setInviteLink] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
   // Edit user state
@@ -75,7 +76,12 @@ export default function UsersPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Invite failed')
       setInviteSent(true)
-      toast.success(data.message || `Invitation sent to ${inviteEmail}`)
+      if (data.emailWarning) {
+        setInviteLink(data.inviteUrl)
+        toast.warning('User created but email failed — copy the invite link below.')
+      } else {
+        toast.success(data.message || `Invitation sent to ${inviteEmail}`)
+      }
       load()
     } catch (err) {
       toast.error(err.message)
@@ -91,6 +97,7 @@ export default function UsersPage() {
     setInviteLastName('')
     setInviteRole('STAFF')
     setInviteSent(false)
+    setInviteLink(null)
   }
 
   const openEdit = (u) => {
@@ -410,17 +417,35 @@ export default function UsersPage() {
 
           {inviteSent ? (
             <div className="text-center py-6 space-y-3">
-              <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                <Mail className="w-7 h-7 text-green-600" />
+              <div className={`w-14 h-14 ${inviteLink ? 'bg-yellow-100' : 'bg-green-100'} rounded-full flex items-center justify-center mx-auto`}>
+                <Mail className={`w-7 h-7 ${inviteLink ? 'text-yellow-600' : 'text-green-600'}`} />
               </div>
               <h3 className="font-semibold text-lg">User Created!</h3>
-              <p className="text-sm text-muted-foreground">
-                A branded invite email was sent to <strong>{inviteEmail}</strong>.<br />
-                They&apos;ll receive a secure link to set their own password and access their account.
-              </p>
+              {inviteLink ? (
+                <div className="text-left space-y-2">
+                  <p className="text-sm text-muted-foreground text-center">
+                    Email failed to send. Share this invite link manually with <strong>{inviteEmail}</strong>:
+                  </p>
+                  <div className="bg-muted rounded-lg p-3 break-all text-xs font-mono border">
+                    {inviteLink}
+                  </div>
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    onClick={() => { navigator.clipboard.writeText(inviteLink); toast.success('Link copied!') }}
+                  >
+                    Copy Invite Link
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  A branded invite email was sent to <strong>{inviteEmail}</strong>.<br />
+                  They&apos;ll receive a secure link to set their own password and access their account.
+                </p>
+              )}
               <div className="flex gap-2 justify-center pt-2">
                 <Button variant="outline" onClick={resetInviteForm}>Close</Button>
-                <Button onClick={() => { setInviteSent(false); setInviteEmail(''); setInviteFirstName(''); setInviteLastName('') }}>
+                <Button onClick={() => { setInviteSent(false); setInviteLink(null); setInviteEmail(''); setInviteFirstName(''); setInviteLastName('') }}>
                   Create Another
                 </Button>
               </div>
