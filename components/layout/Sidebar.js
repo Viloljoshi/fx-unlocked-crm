@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, Building2, DollarSign, UserCog, Shield,
-  BarChart3, ScrollText, TrendingUp, MessageSquare, Settings, X, ChevronLeft, ChevronRight, Calendar, LineChart, Handshake
+  BarChart3, ScrollText, TrendingUp, MessageSquare, Settings, X, ChevronLeft, ChevronRight, Calendar, LineChart, Handshake, CheckSquare
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,7 @@ const navItems = [
   { name: 'Appointments', href: '/dashboard/appointments', icon: Calendar },
   { name: 'Analytics', href: '/dashboard/analytics', icon: LineChart },
   { name: 'Deals', href: '/dashboard/deals', icon: Handshake },
+  { name: 'Tasks', href: '/dashboard/tasks', icon: CheckSquare },
 ]
 
 const adminItems = [
