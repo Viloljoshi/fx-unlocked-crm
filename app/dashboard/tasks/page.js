@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -15,7 +15,8 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   CheckSquare, Plus, Search, Trash2, Pencil, ChevronUp, ChevronDown,
   ChevronsUpDown, AlertCircle, Clock, CheckCircle2, XCircle,
-  Flame, TrendingUp, Minus, ArrowUp, Calendar, User, Filter, X
+  Flame, TrendingUp, Minus, ArrowUp, Calendar, User, Filter, X,
+  ChevronRight, MessageSquare, Send, StickyNote
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useUserRole } from '@/lib/hooks/useUserRole'
@@ -197,6 +198,13 @@ export default function TasksPage() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
+  // notes
+  const [expandedTask, setExpandedTask] = useState(null)
+  const [taskNotes, setTaskNotes] = useState({}) // { taskId: [notes] }
+  const [notesLoading, setNotesLoading] = useState({})
+  const [newNote, setNewNote] = useState('')
+  const [addingNote, setAddingNote] = useState(false)
+
   // ── Data Loading ───────────────────────────────────────────────
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -356,6 +364,76 @@ export default function TasksPage() {
     setFilterStatus('all')
     setFilterPriority('all')
     setFilterOwner('all')
+  }
+
+  // ── Notes ───────────────────────────────────────────────────────
+  async function toggleNotes(taskId) {
+    if (expandedTask === taskId) {
+      setExpandedTask(null)
+      return
+    }
+    setExpandedTask(taskId)
+    setNewNote('')
+    if (!taskNotes[taskId]) {
+      await loadNotes(taskId)
+    }
+  }
+
+  async function loadNotes(taskId) {
+    setNotesLoading(prev => ({ ...prev, [taskId]: true }))
+    const { data, error } = await supabase
+      .from('task_notes')
+      .select('*, author:profiles!task_notes_created_by_fkey(id,first_name,last_name,email)')
+      .eq('task_id', taskId)
+      .order('created_at', { ascending: true })
+
+    if (!error) {
+      setTaskNotes(prev => ({ ...prev, [taskId]: data || [] }))
+    } else {
+      // fallback without join
+      const plain = await supabase.from('task_notes').select('*').eq('task_id', taskId).order('created_at', { ascending: true })
+      setTaskNotes(prev => ({ ...prev, [taskId]: plain.data || [] }))
+    }
+    setNotesLoading(prev => ({ ...prev, [taskId]: false }))
+  }
+
+  async function handleAddNote(taskId) {
+    if (!newNote.trim()) return
+    setAddingNote(true)
+    const { error } = await supabase.from('task_notes').insert({
+      task_id: taskId,
+      content: newNote.trim(),
+      created_by: userId,
+    })
+    if (error) { toast.error('Failed to add note'); setAddingNote(false); return }
+    toast.success('Note added')
+    setNewNote('')
+    setAddingNote(false)
+    await loadNotes(taskId)
+  }
+
+  async function handleDeleteNote(noteId, taskId) {
+    const { error } = await supabase.from('task_notes').delete().eq('id', noteId)
+    if (error) { toast.error('Failed to delete note'); return }
+    toast.success('Note deleted')
+    setTaskNotes(prev => ({
+      ...prev,
+      [taskId]: (prev[taskId] || []).filter(n => n.id !== noteId),
+    }))
+  }
+
+  function formatNoteDate(dateStr) {
+    const d = new Date(dateStr)
+    const now = new Date()
+    const diffMs = now - d
+    const diffMins = Math.floor(diffMs / 60000)
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    const diffHrs = Math.floor(diffMins / 60)
+    if (diffHrs < 24) return `${diffHrs}h ago`
+    const diffDays = Math.floor(diffHrs / 24)
+    if (diffDays < 7) return `${diffDays}d ago`
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
   }
 
   // ── Render ─────────────────────────────────────────────────────
@@ -548,26 +626,50 @@ export default function TasksPage() {
                 const owner = task.owner || staff.find(s => s.id === task.owner_id)
                 const initials = getInitials(owner)
                 const isDone = task.status === 'DONE'
+                const isExpanded = expandedTask === task.id
+                const notes = taskNotes[task.id] || []
+                const noteCount = notes.length
 
                 return (
+                  <React.Fragment key={task.id}>
                   <tr
-                    key={task.id}
                     className={cn(
                       'group hover:bg-muted/30 transition-colors',
-                      isDone && 'opacity-60'
+                      isDone && 'opacity-60',
+                      isExpanded && 'bg-muted/20'
                     )}
                   >
                     {/* Title */}
                     <td className="px-4 py-3.5">
-                      <div className="flex flex-col gap-0.5">
-                        <span className={cn('font-medium leading-snug', isDone && 'line-through text-muted-foreground')}>
-                          {task.title}
-                        </span>
-                        {task.description && (
-                          <span className="text-xs text-muted-foreground truncate max-w-[260px]">
-                            {task.description}
-                          </span>
-                        )}
+                      <div className="flex items-start gap-2">
+                        <button
+                          onClick={() => toggleNotes(task.id)}
+                          className={cn(
+                            'mt-0.5 p-0.5 rounded transition-all hover:bg-muted shrink-0',
+                            isExpanded && 'text-primary'
+                          )}
+                          title={isExpanded ? 'Collapse notes' : 'Expand notes'}
+                        >
+                          <ChevronRight className={cn('w-4 h-4 transition-transform', isExpanded && 'rotate-90')} />
+                        </button>
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className={cn('font-medium leading-snug', isDone && 'line-through text-muted-foreground')}>
+                              {task.title}
+                            </span>
+                            {noteCount > 0 && (
+                              <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
+                                <MessageSquare className="w-3 h-3" />
+                                {noteCount}
+                              </span>
+                            )}
+                          </div>
+                          {task.description && (
+                            <span className="text-xs text-muted-foreground truncate max-w-[260px]">
+                              {task.description}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
 
@@ -690,6 +792,92 @@ export default function TasksPage() {
                       </div>
                     </td>
                   </tr>
+
+                  {/* ── Expandable Notes Row ── */}
+                  {isExpanded && (
+                    <tr className="bg-muted/10">
+                      <td colSpan={6} className="px-4 py-0">
+                        <div className="py-3 pl-8 pr-2 space-y-3 border-l-2 border-primary/20 ml-2">
+                          {/* Notes header */}
+                          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                            <StickyNote className="w-3.5 h-3.5" />
+                            Notes {noteCount > 0 && `(${noteCount})`}
+                          </div>
+
+                          {/* Loading state */}
+                          {notesLoading[task.id] && (
+                            <div className="space-y-2">
+                              <Skeleton className="h-10 w-full rounded" />
+                              <Skeleton className="h-10 w-3/4 rounded" />
+                            </div>
+                          )}
+
+                          {/* Notes list */}
+                          {!notesLoading[task.id] && notes.length === 0 && (
+                            <p className="text-xs text-muted-foreground italic">No notes yet. Add the first one below.</p>
+                          )}
+
+                          {!notesLoading[task.id] && notes.map(note => {
+                            const noteAuthor = note.author || staff.find(s => s.id === note.created_by)
+                            return (
+                              <div key={note.id} className="group/note flex gap-3 items-start">
+                                <div className="w-6 h-6 rounded-full bg-primary/10 text-primary text-[10px] font-semibold flex items-center justify-center shrink-0 ring-1 ring-primary/20 mt-0.5">
+                                  {getInitials(noteAuthor)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-medium">{fullName(noteAuthor)}</span>
+                                    <span className="text-[11px] text-muted-foreground">{formatNoteDate(note.created_at)}</span>
+                                  </div>
+                                  <p className="text-sm text-foreground/90 mt-0.5 whitespace-pre-wrap break-words">{note.content}</p>
+                                </div>
+                                {(isAdmin || note.created_by === userId) && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 opacity-0 group-hover/note:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-destructive"
+                                    onClick={() => handleDeleteNote(note.id, task.id)}
+                                    title="Delete note"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                )}
+                              </div>
+                            )
+                          })}
+
+                          {/* Add note input */}
+                          {!notesLoading[task.id] && (
+                            <div className="flex gap-2 items-end pt-1">
+                              <Textarea
+                                placeholder="Add a note or update..."
+                                value={newNote}
+                                onChange={e => setNewNote(e.target.value)}
+                                rows={1}
+                                className="resize-none text-sm min-h-[36px] flex-1 bg-background"
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault()
+                                    handleAddNote(task.id)
+                                  }
+                                }}
+                              />
+                              <Button
+                                size="sm"
+                                className="h-9 gap-1.5 shrink-0"
+                                onClick={() => handleAddNote(task.id)}
+                                disabled={addingNote || !newNote.trim()}
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                                {addingNote ? 'Adding...' : 'Add'}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
                 )
               })}
             </tbody>

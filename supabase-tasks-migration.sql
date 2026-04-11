@@ -75,3 +75,69 @@ DROP POLICY IF EXISTS "tasks_delete" ON tasks;
 CREATE POLICY "tasks_delete" ON tasks
   FOR DELETE TO authenticated
   USING ((SELECT get_user_role()) = 'ADMIN');
+
+-- ============================================================
+-- Task Notes — expandable notes per task
+-- Added: 2026-04-11
+-- ============================================================
+
+-- ── 1. Create task_notes table ────────────────────────────────
+CREATE TABLE IF NOT EXISTS task_notes (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id     UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  content     TEXT NOT NULL,
+  created_by  UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ── 2. Indexes ────────────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_task_notes_task_id    ON task_notes(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_notes_created_by ON task_notes(created_by);
+CREATE INDEX IF NOT EXISTS idx_task_notes_created_at ON task_notes(created_at);
+
+-- ── 3. Auto-update updated_at ─────────────────────────────────
+CREATE OR REPLACE FUNCTION update_task_notes_updated_at()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS task_notes_updated_at ON task_notes;
+CREATE TRIGGER task_notes_updated_at
+  BEFORE UPDATE ON task_notes
+  FOR EACH ROW EXECUTE FUNCTION update_task_notes_updated_at();
+
+-- ── 4. Row Level Security ─────────────────────────────────────
+ALTER TABLE task_notes ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "task_notes_select" ON task_notes;
+CREATE POLICY "task_notes_select" ON task_notes
+  FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "task_notes_insert" ON task_notes;
+CREATE POLICY "task_notes_insert" ON task_notes
+  FOR INSERT TO authenticated
+  WITH CHECK (created_by = (SELECT auth.uid()));
+
+DROP POLICY IF EXISTS "task_notes_update" ON task_notes;
+CREATE POLICY "task_notes_update" ON task_notes
+  FOR UPDATE TO authenticated
+  USING (
+    (SELECT get_user_role()) = 'ADMIN'
+    OR created_by = (SELECT auth.uid())
+  );
+
+DROP POLICY IF EXISTS "task_notes_delete" ON task_notes;
+CREATE POLICY "task_notes_delete" ON task_notes
+  FOR DELETE TO authenticated
+  USING (
+    (SELECT get_user_role()) = 'ADMIN'
+    OR created_by = (SELECT auth.uid())
+  );
