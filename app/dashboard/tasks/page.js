@@ -205,21 +205,26 @@ export default function TasksPage() {
   const [newNote, setNewNote] = useState('')
   const [addingNote, setAddingNote] = useState(false)
 
-  // ── Email Notification (fire-and-forget) ──────────────────────
-  function notifyTaskAssigned({ assigneeEmail, assigneeName, assignerName, title, priority, deadline, description }) {
-    fetch('/api/tasks/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'assigned', assigneeEmail, assigneeName, assignerName, title, priority, deadline, description }),
-    }).catch(err => console.error('Task assign email failed:', err))
-  }
-
-  function notifyTaskCompleted({ assignerEmail, assignerName, completedByName, title, priority }) {
-    fetch('/api/tasks/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'completed', assignerEmail, assignerName, completedByName, title, priority }),
-    }).catch(err => console.error('Task complete email failed:', err))
+  // ── Email Notification ────────────────────────────────────────
+  async function sendTaskNotify(payload) {
+    try {
+      console.log('[TaskNotify] Sending:', payload.type, 'to:', payload.assigneeEmail || payload.assignerEmail)
+      const res = await fetch('/api/tasks/notify', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        console.error('[TaskNotify] API error:', res.status, data)
+        toast.error('Email notification failed')
+      } else {
+        console.log('[TaskNotify] Success:', data)
+      }
+    } catch (err) {
+      console.error('[TaskNotify] Fetch error:', err)
+    }
   }
 
   // helper: get current user's display name
@@ -356,7 +361,8 @@ export default function TasksPage() {
       if (ownerChanged) {
         const assignee = staff.find(s => s.id === payload.owner_id)
         if (assignee?.email) {
-          notifyTaskAssigned({
+          sendTaskNotify({
+            type: 'assigned',
             assigneeEmail: assignee.email,
             assigneeName: fullName(assignee),
             assignerName: currentUserName(),
@@ -373,7 +379,8 @@ export default function TasksPage() {
       if (justCompleted) {
         const creator = editing.creator || staff.find(s => s.id === editing.created_by)
         if (creator?.email) {
-          notifyTaskCompleted({
+          sendTaskNotify({
+          type: 'completed',
             assignerEmail: creator.email,
             assignerName: fullName(creator),
             completedByName: currentUserName(),
@@ -391,7 +398,8 @@ export default function TasksPage() {
       if (payload.owner_id) {
         const assignee = staff.find(s => s.id === payload.owner_id)
         if (assignee?.email) {
-          notifyTaskAssigned({
+          sendTaskNotify({
+            type: 'assigned',
             assigneeEmail: assignee.email,
             assigneeName: fullName(assignee),
             assignerName: currentUserName(),
@@ -420,7 +428,8 @@ export default function TasksPage() {
     if (field === 'status' && value === 'DONE' && task?.status !== 'DONE') {
       const creator = task?.creator || staff.find(s => s.id === task?.created_by)
       if (creator?.email) {
-        notifyTaskCompleted({
+        sendTaskNotify({
+          type: 'completed',
           assignerEmail: creator.email,
           assignerName: fullName(creator),
           completedByName: currentUserName(),
