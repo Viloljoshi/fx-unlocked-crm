@@ -205,10 +205,10 @@ export default function TasksPage() {
   const [newNote, setNewNote] = useState('')
   const [addingNote, setAddingNote] = useState(false)
 
-  // ── Email Notification ────────────────────────────────────────
+  // ── Email Notification (server handles email lookup) ──────────
   async function sendTaskNotify(payload) {
     try {
-      console.log('[TaskNotify] Sending:', payload.type, 'to:', payload.assigneeEmail || payload.assignerEmail)
+      console.log('[TaskNotify] Sending:', payload.type, payload)
       const res = await fetch('/api/tasks/notify', {
         method: 'POST',
         credentials: 'include',
@@ -218,51 +218,32 @@ export default function TasksPage() {
       const data = await res.json()
       if (!res.ok || !data.success) {
         console.error('[TaskNotify] API error:', res.status, data)
-        toast.error('Email notification failed')
       } else {
-        console.log('[TaskNotify] Success:', data)
+        console.log('[TaskNotify] Email sent successfully')
       }
     } catch (err) {
       console.error('[TaskNotify] Fetch error:', err)
     }
   }
 
-  // helper: get current user's display name
-  function currentUserName() {
-    const me = staff.find(s => s.id === userId)
-    return me ? fullName(me) : 'Someone'
-  }
-
   // ── Data Loading ───────────────────────────────────────────────
   const loadData = useCallback(async () => {
     setLoading(true)
-    const [tasksRes, usersRes] = await Promise.all([
+    const [tasksRes, staffRes] = await Promise.all([
       supabase
         .from('tasks')
         .select('*, owner:profiles!tasks_owner_id_fkey(id,first_name,last_name), creator:profiles!tasks_created_by_fkey(id,first_name,last_name)')
         .order('created_at', { ascending: false }),
-      fetch('/api/tasks/staff', { credentials: 'include' }).then(r => r.json()).catch(() => ({ staff: [] })),
+      supabase.from('profiles').select('id,first_name,last_name').eq('is_active', true).order('first_name'),
     ])
-
-    // Staff list with emails (merged from auth.users on server side)
-    const activeStaff = usersRes?.staff || []
-    setStaff(activeStaff)
-
-    // Build email lookup for enriching task owner/creator
-    const emailMap = {}
-    activeStaff.forEach(u => { emailMap[u.id] = u.email })
 
     if (tasksRes.error) {
       const plain = await supabase.from('tasks').select('*').order('created_at', { ascending: false })
       setTasks(plain.data || [])
     } else {
-      const enriched = (tasksRes.data || []).map(t => ({
-        ...t,
-        owner: t.owner ? { ...t.owner, email: emailMap[t.owner.id] || null } : null,
-        creator: t.creator ? { ...t.creator, email: emailMap[t.creator.id] || null } : null,
-      }))
-      setTasks(enriched)
+      setTasks(tasksRes.data || [])
     }
+    setStaff(staffRes.data || [])
     setLoading(false)
   }, [])
 
@@ -368,37 +349,13 @@ export default function TasksPage() {
       toast.success('Task updated')
 
       // Email: if owner changed (reassigned), notify new assignee
-      const ownerChanged = payload.owner_id && payload.owner_id !== editing.owner_id
-      if (ownerChanged) {
-        const assignee = staff.find(s => s.id === payload.owner_id)
-        if (assignee?.email) {
-          sendTaskNotify({
-            type: 'assigned',
-            assigneeEmail: assignee.email,
-            assigneeName: fullName(assignee),
-            assignerName: currentUserName(),
-            title: payload.title,
-            priority: payload.priority,
-            deadline: payload.deadline,
-            description: payload.description,
-          })
-        }
+      if (payload.owner_id && payload.owner_id !== editing.owner_id) {
+        sendTaskNotify({ type: 'assigned', ownerId: payload.owner_id, title: payload.title, priority: payload.priority, deadline: payload.deadline, description: payload.description })
       }
 
       // Email: if status changed to DONE, notify creator
-      const justCompleted = payload.status === 'DONE' && editing.status !== 'DONE'
-      if (justCompleted) {
-        const creator = editing.creator || staff.find(s => s.id === editing.created_by)
-        if (creator?.email) {
-          sendTaskNotify({
-          type: 'completed',
-            assignerEmail: creator.email,
-            assignerName: fullName(creator),
-            completedByName: currentUserName(),
-            title: payload.title,
-            priority: payload.priority,
-          })
-        }
+      if (payload.status === 'DONE' && editing.status !== 'DONE') {
+        sendTaskNotify({ type: 'completed', createdBy: editing.created_by, title: payload.title, priority: payload.priority })
       }
     } else {
       const { error } = await supabase.from('tasks').insert({ ...payload, created_by: userId })
@@ -406,22 +363,8 @@ export default function TasksPage() {
       toast.success('Task created')
 
       // Email: if assigned to someone on creation, notify assignee
-      console.log('[TaskEmail] New task created. owner_id:', payload.owner_id, 'staff count:', staff.length)
       if (payload.owner_id) {
-        const assignee = staff.find(s => s.id === payload.owner_id)
-        console.log('[TaskEmail] Assignee found:', assignee ? `${assignee.email} (${assignee.first_name})` : 'NOT FOUND')
-        if (assignee?.email) {
-          await sendTaskNotify({
-            type: 'assigned',
-            assigneeEmail: assignee.email,
-            assigneeName: fullName(assignee),
-            assignerName: currentUserName(),
-            title: payload.title,
-            priority: payload.priority,
-            deadline: payload.deadline,
-            description: payload.description,
-          })
-        }
+        sendTaskNotify({ type: 'assigned', ownerId: payload.owner_id, title: payload.title, priority: payload.priority, deadline: payload.deadline, description: payload.description })
       }
     }
 
@@ -439,17 +382,7 @@ export default function TasksPage() {
 
     // Email: if status changed to DONE via inline edit, notify creator
     if (field === 'status' && value === 'DONE' && task?.status !== 'DONE') {
-      const creator = task?.creator || staff.find(s => s.id === task?.created_by)
-      if (creator?.email) {
-        sendTaskNotify({
-          type: 'completed',
-          assignerEmail: creator.email,
-          assignerName: fullName(creator),
-          completedByName: currentUserName(),
-          title: task.title,
-          priority: task.priority,
-        })
-      }
+      sendTaskNotify({ type: 'completed', createdBy: task.created_by, title: task.title, priority: task.priority })
     }
 
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, [field]: value } : t))

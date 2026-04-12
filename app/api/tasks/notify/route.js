@@ -1,63 +1,100 @@
 import { NextResponse } from 'next/server'
-import { getAuthUser } from '@/lib/supabase/server'
+import { createAdminClient, getAuthUser } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email/resend'
 import {
   taskAssignedTemplate,
   taskCompletedTemplate,
 } from '@/lib/email/templates/task-notifications'
 
+// Helper: get email from auth.users + name from profiles
+async function getUserInfo(supabase, userId) {
+  if (!userId) return null
+  const [{ data: profile }, { data: authData }] = await Promise.all([
+    supabase.from('profiles').select('id,first_name,last_name').eq('id', userId).single(),
+    supabase.auth.admin.getUserById(userId),
+  ])
+  const email = authData?.user?.email || null
+  const name = profile
+    ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || email || 'Someone'
+    : email || 'Someone'
+  return { email, name }
+}
+
 // POST /api/tasks/notify
-// type: "assigned" | "completed"
+// Client sends IDs + task details; server resolves emails via admin client
 export async function POST(request) {
   try {
-    const { user, role } = await getAuthUser()
+    const { user, role, profile } = await getAuthUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const supabase = createAdminClient()
     const body = await request.json()
     const { type } = body
 
+    // Current user's display name (the person triggering the action)
+    const currentUserName = profile
+      ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || user.email
+      : user.email
+
     if (type === 'assigned') {
-      const { assigneeEmail, assigneeName, assignerName, title, priority, deadline, description } = body
-      if (!assigneeEmail || !title) {
-        return NextResponse.json({ error: 'assigneeEmail and title are required' }, { status: 400 })
+      const { ownerId, title, priority, deadline, description } = body
+      if (!ownerId || !title) {
+        return NextResponse.json({ error: 'ownerId and title are required' }, { status: 400 })
       }
 
+      const assignee = await getUserInfo(supabase, ownerId)
+      if (!assignee?.email) {
+        console.error('[TaskNotify] No email found for owner:', ownerId)
+        return NextResponse.json({ success: false, error: 'No email found for assignee' }, { status: 400 })
+      }
+
+      console.log('[TaskNotify] Sending assignment email to:', assignee.email)
       await sendEmail({
-        to: assigneeEmail,
+        to: assignee.email,
         subject: `New task assigned: ${title}`,
         html: taskAssignedTemplate({
-          assigneeName: assigneeName || 'there',
-          assignerName: assignerName || 'Someone',
+          assigneeName: assignee.name,
+          assignerName: currentUserName,
           title,
           priority: priority || 'MEDIUM',
           deadline: deadline || null,
           description: description || null,
         }),
       })
+      console.log('[TaskNotify] Assignment email sent successfully')
+
     } else if (type === 'completed') {
-      const { assignerEmail, assignerName, completedByName, title, priority } = body
-      if (!assignerEmail || !title) {
-        return NextResponse.json({ error: 'assignerEmail and title are required' }, { status: 400 })
+      const { createdBy, title, priority } = body
+      if (!createdBy || !title) {
+        return NextResponse.json({ error: 'createdBy and title are required' }, { status: 400 })
       }
 
+      const creator = await getUserInfo(supabase, createdBy)
+      if (!creator?.email) {
+        console.error('[TaskNotify] No email found for creator:', createdBy)
+        return NextResponse.json({ success: false, error: 'No email found for creator' }, { status: 400 })
+      }
+
+      console.log('[TaskNotify] Sending completion email to:', creator.email)
       await sendEmail({
-        to: assignerEmail,
+        to: creator.email,
         subject: `Task completed: ${title}`,
         html: taskCompletedTemplate({
-          assignerName: assignerName || 'there',
-          completedByName: completedByName || 'Someone',
+          assignerName: creator.name,
+          completedByName: currentUserName,
           title,
           priority: priority || 'MEDIUM',
         }),
       })
+      console.log('[TaskNotify] Completion email sent successfully')
+
     } else {
       return NextResponse.json({ error: 'Invalid type. Use "assigned" or "completed"' }, { status: 400 })
     }
 
     return NextResponse.json({ success: true })
   } catch (err) {
-    console.error('Task notify error:', err)
-    // Non-fatal — don't block task operations if email fails
+    console.error('[TaskNotify] Error:', err)
     return NextResponse.json({ success: false, error: err.message }, { status: 500 })
   }
 }
