@@ -236,22 +236,33 @@ export default function TasksPage() {
   // ── Data Loading ───────────────────────────────────────────────
   const loadData = useCallback(async () => {
     setLoading(true)
-    const [tasksRes, staffRes] = await Promise.all([
+    const [tasksRes, usersRes] = await Promise.all([
       supabase
         .from('tasks')
-        .select('*, owner:profiles!tasks_owner_id_fkey(id,first_name,last_name,email), creator:profiles!tasks_created_by_fkey(id,first_name,last_name,email)')
+        .select('*, owner:profiles!tasks_owner_id_fkey(id,first_name,last_name), creator:profiles!tasks_created_by_fkey(id,first_name,last_name)')
         .order('created_at', { ascending: false }),
-      supabase.from('profiles').select('id,first_name,last_name,email').eq('is_active', true).order('first_name'),
+      fetch('/api/tasks/staff', { credentials: 'include' }).then(r => r.json()).catch(() => ({ staff: [] })),
     ])
 
+    // Staff list with emails (merged from auth.users on server side)
+    const activeStaff = usersRes?.staff || []
+    setStaff(activeStaff)
+
+    // Build email lookup for enriching task owner/creator
+    const emailMap = {}
+    activeStaff.forEach(u => { emailMap[u.id] = u.email })
+
     if (tasksRes.error) {
-      // Fallback: join manually if FK alias fails
       const plain = await supabase.from('tasks').select('*').order('created_at', { ascending: false })
       setTasks(plain.data || [])
     } else {
-      setTasks(tasksRes.data || [])
+      const enriched = (tasksRes.data || []).map(t => ({
+        ...t,
+        owner: t.owner ? { ...t.owner, email: emailMap[t.owner.id] || null } : null,
+        creator: t.creator ? { ...t.creator, email: emailMap[t.creator.id] || null } : null,
+      }))
+      setTasks(enriched)
     }
-    setStaff(staffRes.data || [])
     setLoading(false)
   }, [])
 
