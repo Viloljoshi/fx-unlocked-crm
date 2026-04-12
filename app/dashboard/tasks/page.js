@@ -205,13 +205,36 @@ export default function TasksPage() {
   const [newNote, setNewNote] = useState('')
   const [addingNote, setAddingNote] = useState(false)
 
+  // ── Email Notification (fire-and-forget) ──────────────────────
+  function notifyTaskAssigned({ assigneeEmail, assigneeName, assignerName, title, priority, deadline, description }) {
+    fetch('/api/tasks/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'assigned', assigneeEmail, assigneeName, assignerName, title, priority, deadline, description }),
+    }).catch(err => console.error('Task assign email failed:', err))
+  }
+
+  function notifyTaskCompleted({ assignerEmail, assignerName, completedByName, title, priority }) {
+    fetch('/api/tasks/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'completed', assignerEmail, assignerName, completedByName, title, priority }),
+    }).catch(err => console.error('Task complete email failed:', err))
+  }
+
+  // helper: get current user's display name
+  function currentUserName() {
+    const me = staff.find(s => s.id === userId)
+    return me ? fullName(me) : 'Someone'
+  }
+
   // ── Data Loading ───────────────────────────────────────────────
   const loadData = useCallback(async () => {
     setLoading(true)
     const [tasksRes, staffRes] = await Promise.all([
       supabase
         .from('tasks')
-        .select('*, owner:profiles!tasks_owner_id_fkey(id,first_name,last_name,email), creator:profiles!tasks_created_by_fkey(id,first_name,last_name)')
+        .select('*, owner:profiles!tasks_owner_id_fkey(id,first_name,last_name,email), creator:profiles!tasks_created_by_fkey(id,first_name,last_name,email)')
         .order('created_at', { ascending: false }),
       supabase.from('profiles').select('id,first_name,last_name,email').eq('is_active', true).order('first_name'),
     ])
@@ -327,10 +350,58 @@ export default function TasksPage() {
       const { error } = await supabase.from('tasks').update(payload).eq('id', editing.id)
       if (error) { toast.error('Failed to update task'); setSaving(false); return }
       toast.success('Task updated')
+
+      // Email: if owner changed (reassigned), notify new assignee
+      const ownerChanged = payload.owner_id && payload.owner_id !== editing.owner_id
+      if (ownerChanged) {
+        const assignee = staff.find(s => s.id === payload.owner_id)
+        if (assignee?.email) {
+          notifyTaskAssigned({
+            assigneeEmail: assignee.email,
+            assigneeName: fullName(assignee),
+            assignerName: currentUserName(),
+            title: payload.title,
+            priority: payload.priority,
+            deadline: payload.deadline,
+            description: payload.description,
+          })
+        }
+      }
+
+      // Email: if status changed to DONE, notify creator
+      const justCompleted = payload.status === 'DONE' && editing.status !== 'DONE'
+      if (justCompleted) {
+        const creator = editing.creator || staff.find(s => s.id === editing.created_by)
+        if (creator?.email) {
+          notifyTaskCompleted({
+            assignerEmail: creator.email,
+            assignerName: fullName(creator),
+            completedByName: currentUserName(),
+            title: payload.title,
+            priority: payload.priority,
+          })
+        }
+      }
     } else {
       const { error } = await supabase.from('tasks').insert({ ...payload, created_by: userId })
       if (error) { toast.error('Failed to create task'); setSaving(false); return }
       toast.success('Task created')
+
+      // Email: if assigned to someone on creation, notify assignee
+      if (payload.owner_id && payload.owner_id !== userId) {
+        const assignee = staff.find(s => s.id === payload.owner_id)
+        if (assignee?.email) {
+          notifyTaskAssigned({
+            assigneeEmail: assignee.email,
+            assigneeName: fullName(assignee),
+            assignerName: currentUserName(),
+            title: payload.title,
+            priority: payload.priority,
+            deadline: payload.deadline,
+            description: payload.description,
+          })
+        }
+      }
     }
 
     setSaving(false)
@@ -342,6 +413,23 @@ export default function TasksPage() {
   async function handleQuickUpdate(taskId, field, value) {
     const { error } = await supabase.from('tasks').update({ [field]: value }).eq('id', taskId)
     if (error) { toast.error('Update failed'); return }
+
+    const task = tasks.find(t => t.id === taskId)
+
+    // Email: if status changed to DONE via inline edit, notify creator
+    if (field === 'status' && value === 'DONE' && task?.status !== 'DONE') {
+      const creator = task?.creator || staff.find(s => s.id === task?.created_by)
+      if (creator?.email) {
+        notifyTaskCompleted({
+          assignerEmail: creator.email,
+          assignerName: fullName(creator),
+          completedByName: currentUserName(),
+          title: task.title,
+          priority: task.priority,
+        })
+      }
+    }
+
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, [field]: value } : t))
     setQuickEdit(null)
     toast.success('Updated')
