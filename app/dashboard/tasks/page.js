@@ -708,9 +708,16 @@ export default function TasksPage() {
                             )}
                           </div>
                           {task.description && (
-                            <span className="text-xs text-muted-foreground truncate max-w-[260px]">
-                              {task.description}
-                            </span>
+                            <div className="relative group/desc max-w-[320px]">
+                              <span className="text-xs text-muted-foreground line-clamp-2 cursor-default">
+                                {task.description}
+                              </span>
+                              {task.description.length > 80 && (
+                                <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/desc:block w-[360px] max-h-[200px] overflow-y-auto rounded-lg border bg-popover p-3 text-xs text-popover-foreground shadow-lg">
+                                  {task.description}
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
