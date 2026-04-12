@@ -395,10 +395,12 @@ export default function TasksPage() {
       toast.success('Task created')
 
       // Email: if assigned to someone on creation, notify assignee
+      console.log('[TaskEmail] New task created. owner_id:', payload.owner_id, 'staff count:', staff.length)
       if (payload.owner_id) {
         const assignee = staff.find(s => s.id === payload.owner_id)
+        console.log('[TaskEmail] Assignee found:', assignee ? `${assignee.email} (${assignee.first_name})` : 'NOT FOUND')
         if (assignee?.email) {
-          sendTaskNotify({
+          await sendTaskNotify({
             type: 'assigned',
             assigneeEmail: assignee.email,
             assigneeName: fullName(assignee),
