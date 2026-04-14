@@ -743,6 +743,14 @@ export default function AffiliateDetailPage() {
                   onChangeText={setEditManagerNameFree}
                 />
               </div>
+              <div className="flex items-center gap-2 pt-5">
+                <Checkbox
+                  id="edit_trade_ideas"
+                  checked={editForm.trade_ideas || false}
+                  onCheckedChange={v => setEditForm(f => ({...f, trade_ideas: !!v}))}
+                />
+                <Label htmlFor="edit_trade_ideas" className="text-sm cursor-pointer">Trade Ideas</Label>
+              </div>
               <div className="col-span-2 space-y-1.5">
                 <Label>Website</Label>
                 <Input value={editForm.website || ''} onChange={e => setEditForm(f => ({...f, website: e.target.value}))} />

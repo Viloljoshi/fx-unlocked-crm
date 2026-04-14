@@ -34,6 +34,7 @@ const EMPTY_FORM = {
   manager_name_free: '', // free-text AM name when not in profiles
   country: '', website: '', deal_terms: '', notes: '',
   deal_data: {}, // deal-type-specific fields stored in deal_details.deal JSONB
+  trade_ideas: false,
 }
 
 function BrokerMultiSelect({ brokers, value = [], onChange }) {
@@ -181,6 +182,7 @@ export default function AffiliatesPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [dealTypeFilter, setDealTypeFilter] = useState('all')
   const [brokerFilter, setBrokerFilter] = useState('all')
+  const [tradeIdeasFilter, setTradeIdeasFilter] = useState('all')
   const [addOpen, setAddOpen] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -239,6 +241,8 @@ export default function AffiliatesPage() {
       const ids = (a.affiliate_brokers || []).map(ab => ab.broker_id)
       if (!ids.includes(brokerFilter)) return false
     }
+    if (tradeIdeasFilter === 'yes' && !a.trade_ideas) return false
+    if (tradeIdeasFilter === 'no' && a.trade_ideas) return false
     return true
   })
 
@@ -255,6 +259,7 @@ export default function AffiliatesPage() {
       country: a.country || '', website: a.website || '',
       deal_terms: a.deal_terms || '', notes: a.notes || '',
       deal_data: a.deal_details?.deal || {},
+      trade_ideas: a.trade_ideas || false,
     })
     setAddOpen(true)
   }
@@ -422,6 +427,14 @@ export default function AffiliatesPage() {
                 {brokers.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            <Select value={tradeIdeasFilter} onValueChange={setTradeIdeasFilter}>
+              <SelectTrigger className="w-40"><SelectValue placeholder="Trade Ideas" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="yes">Trade Ideas</SelectItem>
+                <SelectItem value="no">No Trade Ideas</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="rounded-lg border overflow-hidden">
@@ -532,6 +545,14 @@ export default function AffiliatesPage() {
                   onChangeText={v => setForm(f => ({...f, manager_name_free: v}))}
                   placeholder="Search or type AM name..."
                 />
+              </div>
+              <div className="flex items-center gap-2 pt-5">
+                <Checkbox
+                  id="trade_ideas"
+                  checked={form.trade_ideas || false}
+                  onCheckedChange={v => setForm(f => ({...f, trade_ideas: !!v}))}
+                />
+                <Label htmlFor="trade_ideas" className="text-sm cursor-pointer">Trade Ideas</Label>
               </div>
               <div className="col-span-2 space-y-1.5">
                 <Label>Website</Label>
