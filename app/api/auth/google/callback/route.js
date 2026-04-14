@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { getOAuth2Client } from '@/lib/google/calendar'
 
+const BASE = 'https://crm.fx-unlocked.com'
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -11,23 +13,17 @@ export async function GET(request) {
 
     if (error) {
       console.error('[GoogleCallback] OAuth error:', error)
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_SITE_URL || 'https://crm.fx-unlocked.com'}/dashboard/appointments?google=error&reason=${error}`
-      )
+      return NextResponse.redirect(`${BASE}/dashboard/appointments?google=error&reason=${error}`)
     }
 
     if (!code || !state) {
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_SITE_URL || 'https://crm.fx-unlocked.com'}/dashboard/appointments?google=error&reason=missing_params`
-      )
+      return NextResponse.redirect(`${BASE}/dashboard/appointments?google=error&reason=missing_params`)
     }
 
     // Decode state to get userId
     const { userId } = JSON.parse(Buffer.from(state, 'base64').toString())
     if (!userId) {
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_SITE_URL || 'https://crm.fx-unlocked.com'}/dashboard/appointments?google=error&reason=invalid_state`
-      )
+      return NextResponse.redirect(`${BASE}/dashboard/appointments?google=error&reason=invalid_state`)
     }
 
     // Exchange code for tokens
@@ -54,20 +50,14 @@ export async function GET(request) {
 
     if (dbError) {
       console.error('[GoogleCallback] DB error:', dbError)
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_SITE_URL || 'https://crm.fx-unlocked.com'}/dashboard/appointments?google=error&reason=db_error`
-      )
+      return NextResponse.redirect(`${BASE}/dashboard/appointments?google=error&reason=db_error`)
     }
 
     console.log('[GoogleCallback] Successfully connected for user:', userId)
 
-    return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_SITE_URL || 'https://crm.fx-unlocked.com'}/dashboard/appointments?google=connected`
-    )
+    return NextResponse.redirect(`${BASE}/dashboard/appointments?google=connected`)
   } catch (error) {
     console.error('[GoogleCallback] Error:', error)
-    return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_SITE_URL || 'https://crm.fx-unlocked.com'}/dashboard/appointments?google=error&reason=server_error`
-    )
+    return NextResponse.redirect(`${BASE}/dashboard/appointments?google=error&reason=server_error`)
   }
 }
