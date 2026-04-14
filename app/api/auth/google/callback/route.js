@@ -1,68 +1,86 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
-import { getOAuth2Client } from '@/lib/google/calendar'
 
 export const dynamic = 'force-dynamic'
 
 const BASE = 'https://crm.fx-unlocked.com'
+const REDIRECT_URI = 'https://crm.fx-unlocked.com/api/auth/google/callback'
+
+function getClientId() {
+  return process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '569042425490-s7bcicle416chlr3bnbm2me3huv1u4p9.apps.googleusercontent.com'
+}
+
+function getClientSecret() {
+  return process.env.GOOGLE_CLIENT_SECRET
+}
 
 export async function GET(request) {
+  const url = new URL(request.url)
+  const code = url.searchParams.get('code')
+  const state = url.searchParams.get('state')
+  const error = url.searchParams.get('error')
+
+  if (error) {
+    return NextResponse.redirect(`${BASE}/dashboard/appointments?google=error&reason=${error}`)
+  }
+
+  if (!code || !state) {
+    return NextResponse.redirect(`${BASE}/dashboard/appointments?google=error&reason=missing_params`)
+  }
+
+  // Decode state
+  let userId
   try {
-    const { searchParams } = request.nextUrl
-    const code = searchParams.get('code')
-    const state = searchParams.get('state')
-    const error = searchParams.get('error')
+    const parsed = JSON.parse(Buffer.from(decodeURIComponent(state), 'base64').toString())
+    userId = parsed.userId
+  } catch {
+    return NextResponse.redirect(`${BASE}/dashboard/appointments?google=error&reason=invalid_state`)
+  }
 
-    if (error) {
-      console.error('[GoogleCallback] OAuth error:', error)
-      return NextResponse.redirect(`${BASE}/dashboard/appointments?google=error&reason=${error}`)
-    }
+  if (!userId) {
+    return NextResponse.redirect(`${BASE}/dashboard/appointments?google=error&reason=no_user_id`)
+  }
 
-    if (!code || !state) {
-      return NextResponse.redirect(`${BASE}/dashboard/appointments?google=error&reason=missing_params`)
-    }
+  // Exchange code for tokens using direct fetch (no googleapis dependency)
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id: getClientId(),
+      client_secret: getClientSecret(),
+      redirect_uri: REDIRECT_URI,
+      grant_type: 'authorization_code',
+    }),
+  })
 
-    // Decode state to get userId
-    const { userId } = JSON.parse(Buffer.from(state, 'base64').toString())
-    if (!userId) {
-      return NextResponse.redirect(`${BASE}/dashboard/appointments?google=error&reason=invalid_state`)
-    }
+  const tokenData = await tokenRes.json()
 
-    // Exchange code for tokens
-    const oauth2Client = getOAuth2Client()
-    const { tokens } = await oauth2Client.getToken(code)
-
-    if (!tokens.refresh_token) {
-      console.error('[GoogleCallback] No refresh token received — user may have already authorized')
-    }
-
-    const supabase = createAdminClient()
-
-    // Upsert token record
-    const { error: dbError } = await supabase
-      .from('google_calendar_tokens')
-      .upsert({
-        user_id: userId,
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token || '',
-        token_expires_at: new Date(tokens.expiry_date).toISOString(),
-        connected_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' })
-
-    if (dbError) {
-      console.error('[GoogleCallback] DB error:', dbError)
-      return NextResponse.redirect(`${BASE}/dashboard/appointments?google=error&reason=db_error`)
-    }
-
-    console.log('[GoogleCallback] Successfully connected for user:', userId)
-
-    return NextResponse.redirect(`${BASE}/dashboard/appointments?google=connected`)
-  } catch (err) {
-    const msg = err?.message || String(err)
-    console.error('[GoogleCallback] Error:', msg, err?.stack || '')
+  if (!tokenRes.ok || tokenData.error) {
+    const detail = tokenData.error_description || tokenData.error || 'token_exchange_failed'
     return NextResponse.redirect(
-      `${BASE}/dashboard/appointments?google=error&reason=server_error&detail=${encodeURIComponent(msg)}`
+      `${BASE}/dashboard/appointments?google=error&reason=token_error&detail=${encodeURIComponent(detail)}`
     )
   }
+
+  // Save tokens to Supabase
+  const supabase = createAdminClient()
+  const { error: dbError } = await supabase
+    .from('google_calendar_tokens')
+    .upsert({
+      user_id: userId,
+      access_token: tokenData.access_token,
+      refresh_token: tokenData.refresh_token || '',
+      token_expires_at: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
+      connected_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
+
+  if (dbError) {
+    return NextResponse.redirect(
+      `${BASE}/dashboard/appointments?google=error&reason=db_error&detail=${encodeURIComponent(dbError.message)}`
+    )
+  }
+
+  return NextResponse.redirect(`${BASE}/dashboard/appointments?google=connected`)
 }
