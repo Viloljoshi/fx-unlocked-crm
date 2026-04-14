@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { getOAuth2Client } from '@/lib/google/calendar'
 
+export const dynamic = 'force-dynamic'
+
 const BASE = 'https://crm.fx-unlocked.com'
 
 export async function GET(request) {
