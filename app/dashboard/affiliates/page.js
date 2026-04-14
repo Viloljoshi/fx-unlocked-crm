@@ -34,7 +34,8 @@ const EMPTY_FORM = {
   manager_name_free: '', // free-text AM name when not in profiles
   country: '', website: '', deal_terms: '', notes: '',
   deal_data: {}, // deal-type-specific fields stored in deal_details.deal JSONB
-  trade_ideas: false,
+  trade_ideas: '',
+  instagram: false, telegram: false, signal_handle: false,
 }
 
 function BrokerMultiSelect({ brokers, value = [], onChange }) {
@@ -183,6 +184,7 @@ export default function AffiliatesPage() {
   const [dealTypeFilter, setDealTypeFilter] = useState('all')
   const [brokerFilter, setBrokerFilter] = useState('all')
   const [tradeIdeasFilter, setTradeIdeasFilter] = useState('all')
+  const [channelFilter, setChannelFilter] = useState('all')
   const [addOpen, setAddOpen] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -241,8 +243,11 @@ export default function AffiliatesPage() {
       const ids = (a.affiliate_brokers || []).map(ab => ab.broker_id)
       if (!ids.includes(brokerFilter)) return false
     }
-    if (tradeIdeasFilter === 'yes' && !a.trade_ideas) return false
-    if (tradeIdeasFilter === 'no' && a.trade_ideas) return false
+    if (tradeIdeasFilter === 'yes' && (!a.trade_ideas || a.trade_ideas.trim() === '')) return false
+    if (tradeIdeasFilter === 'no' && a.trade_ideas && a.trade_ideas.trim() !== '') return false
+    if (channelFilter === 'instagram' && !a.instagram) return false
+    if (channelFilter === 'telegram' && !a.telegram) return false
+    if (channelFilter === 'signal' && !a.signal_handle) return false
     return true
   })
 
@@ -259,7 +264,8 @@ export default function AffiliatesPage() {
       country: a.country || '', website: a.website || '',
       deal_terms: a.deal_terms || '', notes: a.notes || '',
       deal_data: a.deal_details?.deal || {},
-      trade_ideas: a.trade_ideas || false,
+      trade_ideas: a.trade_ideas || '',
+      instagram: a.instagram || false, telegram: a.telegram || false, signal_handle: a.signal_handle || false,
     })
     setAddOpen(true)
   }
@@ -435,6 +441,15 @@ export default function AffiliatesPage() {
                 <SelectItem value="no">No Trade Ideas</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={channelFilter} onValueChange={setChannelFilter}>
+              <SelectTrigger className="w-40"><SelectValue placeholder="Channel" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Channels</SelectItem>
+                <SelectItem value="instagram">Instagram</SelectItem>
+                <SelectItem value="telegram">Telegram</SelectItem>
+                <SelectItem value="signal">Signal</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="rounded-lg border overflow-hidden">
@@ -546,17 +561,28 @@ export default function AffiliatesPage() {
                   placeholder="Search or type AM name..."
                 />
               </div>
-              <div className="flex items-center gap-2 pt-5">
-                <Checkbox
-                  id="trade_ideas"
-                  checked={form.trade_ideas || false}
-                  onCheckedChange={v => setForm(f => ({...f, trade_ideas: !!v}))}
-                />
-                <Label htmlFor="trade_ideas" className="text-sm cursor-pointer">Trade Ideas</Label>
+              <div className="space-y-1.5">
+                <Label>Trade Ideas</Label>
+                <Input value={form.trade_ideas} onChange={e => setForm(f => ({...f, trade_ideas: e.target.value}))} placeholder="e.g. Forex signals, Copy trading..." />
               </div>
               <div className="col-span-2 space-y-1.5">
                 <Label>Website</Label>
                 <Input value={form.website} onChange={e => setForm(f => ({...f, website: e.target.value}))} placeholder="https://..." />
+              </div>
+              <div className="col-span-2 flex items-center gap-6 pt-1">
+                <span className="text-sm font-medium">Channels</span>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <Checkbox checked={form.instagram || false} onCheckedChange={v => setForm(f => ({...f, instagram: !!v}))} />
+                  <span className="text-sm">Instagram</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <Checkbox checked={form.telegram || false} onCheckedChange={v => setForm(f => ({...f, telegram: !!v}))} />
+                  <span className="text-sm">Telegram</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <Checkbox checked={form.signal_handle || false} onCheckedChange={v => setForm(f => ({...f, signal_handle: !!v}))} />
+                  <span className="text-sm">Signal</span>
+                </label>
               </div>
               <div className="col-span-2 space-y-1.5">
                 <Label>Deal Terms</Label>

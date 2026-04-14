@@ -743,17 +743,28 @@ export default function AffiliateDetailPage() {
                   onChangeText={setEditManagerNameFree}
                 />
               </div>
-              <div className="flex items-center gap-2 pt-5">
-                <Checkbox
-                  id="edit_trade_ideas"
-                  checked={editForm.trade_ideas || false}
-                  onCheckedChange={v => setEditForm(f => ({...f, trade_ideas: !!v}))}
-                />
-                <Label htmlFor="edit_trade_ideas" className="text-sm cursor-pointer">Trade Ideas</Label>
+              <div className="space-y-1.5">
+                <Label>Trade Ideas</Label>
+                <Input value={editForm.trade_ideas || ''} onChange={e => setEditForm(f => ({...f, trade_ideas: e.target.value}))} placeholder="e.g. Forex signals, Copy trading..." />
               </div>
               <div className="col-span-2 space-y-1.5">
                 <Label>Website</Label>
                 <Input value={editForm.website || ''} onChange={e => setEditForm(f => ({...f, website: e.target.value}))} />
+              </div>
+              <div className="col-span-2 flex items-center gap-6 pt-1">
+                <span className="text-sm font-medium">Channels</span>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <Checkbox checked={editForm.instagram || false} onCheckedChange={v => setEditForm(f => ({...f, instagram: !!v}))} />
+                  <span className="text-sm">Instagram</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <Checkbox checked={editForm.telegram || false} onCheckedChange={v => setEditForm(f => ({...f, telegram: !!v}))} />
+                  <span className="text-sm">Telegram</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <Checkbox checked={editForm.signal_handle || false} onCheckedChange={v => setEditForm(f => ({...f, signal_handle: !!v}))} />
+                  <span className="text-sm">Signal</span>
+                </label>
               </div>
               <div className="col-span-2 space-y-1.5">
                 <Label>Deal Terms</Label>
