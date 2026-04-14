@@ -436,6 +436,15 @@ export default function AffiliateDetailPage() {
                 <p className="text-muted-foreground text-xs">Total Commissions</p>
                 <p className="text-lg font-semibold">{commissions.length}</p>
               </div>
+              {affiliate.community_name && (
+                <div>
+                  <p className="text-muted-foreground text-xs">Community</p>
+                  <p className="text-sm font-medium">{affiliate.community_name}</p>
+                </div>
+              )}
+              {affiliate.trade_ideas && (
+                <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-xs">Trade Ideas</Badge>
+              )}
               <div className="flex flex-wrap gap-1.5">
                 {affiliate.instagram && <Badge variant="outline" className="text-xs">Instagram</Badge>}
                 {affiliate.telegram && <Badge variant="outline" className="text-xs">Telegram</Badge>}
@@ -755,6 +764,36 @@ export default function AffiliateDetailPage() {
                 <Label>Notes</Label>
                 <Input value={editForm.notes || ''} onChange={e => setEditForm(f => ({...f, notes: e.target.value}))} />
               </div>
+
+              {/* Socials & Community Section */}
+              <div className="col-span-2 pt-2 border-t">
+                <p className="text-sm font-semibold text-muted-foreground mb-2">Socials & Community</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Instagram</Label>
+                <Input value={editForm.instagram || ''} onChange={e => setEditForm(f => ({...f, instagram: e.target.value}))} placeholder="@handle" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Telegram</Label>
+                <Input value={editForm.telegram || ''} onChange={e => setEditForm(f => ({...f, telegram: e.target.value}))} placeholder="@handle" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>X / Twitter</Label>
+                <Input value={editForm.x_handle || ''} onChange={e => setEditForm(f => ({...f, x_handle: e.target.value}))} placeholder="@handle" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Community Name</Label>
+                <Input value={editForm.community_name || ''} onChange={e => setEditForm(f => ({...f, community_name: e.target.value}))} placeholder="e.g. FX Signals VIP" />
+              </div>
+              <div className="col-span-2 flex items-center gap-2 pt-1">
+                <Checkbox
+                  id="trade_ideas"
+                  checked={editForm.trade_ideas || false}
+                  onCheckedChange={v => setEditForm(f => ({...f, trade_ideas: !!v}))}
+                />
+                <Label htmlFor="trade_ideas" className="text-sm cursor-pointer">Uses our Trade Ideas</Label>
+              </div>
+
               {/* Dynamic deal-type-specific fields */}
               <DealTypeFields
                 dealType={editForm.deal_type}
