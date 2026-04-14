@@ -28,6 +28,12 @@ export async function middleware(request) {
 
   const pathname = request.nextUrl.pathname
 
+  // Public pages — allow without auth
+  const publicPaths = ['/', '/privacy', '/terms']
+  if (!user && publicPaths.includes(pathname)) {
+    return supabaseResponse
+  }
+
   // Not logged in → send to login
   if (!user && pathname.startsWith('/dashboard')) {
     const url = request.nextUrl.clone()
