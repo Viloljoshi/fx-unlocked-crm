@@ -56,8 +56,11 @@ export async function GET(request) {
     console.log('[GoogleCallback] Successfully connected for user:', userId)
 
     return NextResponse.redirect(`${BASE}/dashboard/appointments?google=connected`)
-  } catch (error) {
-    console.error('[GoogleCallback] Error:', error)
-    return NextResponse.redirect(`${BASE}/dashboard/appointments?google=error&reason=server_error`)
+  } catch (err) {
+    const msg = err?.message || String(err)
+    console.error('[GoogleCallback] Error:', msg, err?.stack || '')
+    return NextResponse.redirect(
+      `${BASE}/dashboard/appointments?google=error&reason=server_error&detail=${encodeURIComponent(msg)}`
+    )
   }
 }
