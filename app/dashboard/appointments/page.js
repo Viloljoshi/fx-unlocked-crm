@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +23,14 @@ const STATUS_COLORS = { SCHEDULED:'bg-yellow-50 text-yellow-700 border-yellow-20
 const EMPTY_FORM = { affiliate_id:'', title:'', appointment_type:'CALL', scheduled_at:'', notes:'', status:'SCHEDULED' }
 
 export default function AppointmentsPage() {
+  return (
+    <Suspense fallback={<div className="space-y-3">{[...Array(4)].map((_,i)=><Skeleton key={i} className="h-20 rounded-xl" />)}</div>}>
+      <AppointmentsContent />
+    </Suspense>
+  )
+}
+
+function AppointmentsContent() {
   const [appointments, setAppointments] = useState([])
   const [affiliates, setAffiliates] = useState([])
   const [loading, setLoading] = useState(true)
