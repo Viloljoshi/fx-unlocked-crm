@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server'
 import { createAdminClient, getAuthUser } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email/resend'
 import {
-
-export const dynamic = 'force-dynamic'
   taskAssignedTemplate,
   taskCompletedTemplate,
 } from '@/lib/email/templates/task-notifications'
+
+export const dynamic = 'force-dynamic'
 
 // Helper: get email from auth.users + name from profiles
 async function getUserInfo(supabase, userId) {

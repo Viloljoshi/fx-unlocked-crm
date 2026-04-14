@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/supabase/server'
 import {
-
-export const dynamic = 'force-dynamic'
   sendAffiliateApprovedEmail,
   sendAffiliateOnboardingEmail,
   sendAffiliateInactiveEmail,
 } from '@/lib/email/resend'
+
+export const dynamic = 'force-dynamic'
 
 // Called after an affiliate's status is changed in the CRM
 // Sends a branded email to the affiliate's own email address
