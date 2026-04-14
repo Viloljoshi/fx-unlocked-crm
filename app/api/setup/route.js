@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient, getAuthUser } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 const MIGRATION_SQL = `
 -- FX Unlocked CRM Database Schema
 -- Run this in your Supabase SQL Editor (https://supabase.com/dashboard)

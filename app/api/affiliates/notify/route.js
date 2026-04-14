@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/supabase/server'
 import {
+
+export const dynamic = 'force-dynamic'
   sendAffiliateApprovedEmail,
   sendAffiliateOnboardingEmail,
   sendAffiliateInactiveEmail,

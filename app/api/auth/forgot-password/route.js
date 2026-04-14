@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { sendPasswordResetEmail } from '@/lib/email/resend'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request) {
   try {
     const { email } = await request.json()

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getAuthUser, createAdminClient } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const { user } = await getAuthUser()

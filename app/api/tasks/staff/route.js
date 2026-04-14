@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient, getAuthUser } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/tasks/staff
 // Returns active staff with emails (merged from auth.users + profiles)
 // Accessible by any authenticated user (needed for task assignment emails)

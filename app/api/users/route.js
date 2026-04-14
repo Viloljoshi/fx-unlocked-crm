@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient, getAuthUser } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 // GET - list all users with emails from auth.users merged with profiles
 export async function GET() {
   try {

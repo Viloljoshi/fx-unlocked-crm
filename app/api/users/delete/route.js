@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient, getAuthUser } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 export async function DELETE(request) {
   try {
     // Admin only

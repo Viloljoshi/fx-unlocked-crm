@@ -3,6 +3,8 @@ import OpenAI from 'openai'
 import { getAuthUser, createAdminClient } from '@/lib/supabase/server'
 import { getCalendarClient, refreshTokenIfNeeded, buildCalendarEvent } from '@/lib/google/calendar'
 
+export const dynamic = 'force-dynamic'
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 const SYSTEM_PROMPT = `You are a smart assistant that analyzes CRM notes to detect if they mention a follow-up action, meeting, or call that should be scheduled.

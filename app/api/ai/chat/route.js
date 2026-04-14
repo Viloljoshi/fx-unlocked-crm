@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { createAdminClient, getAuthUser } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']

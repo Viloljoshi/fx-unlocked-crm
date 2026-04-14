@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createAdminClient, getAuthUser } from '@/lib/supabase/server'
 import { sendInviteEmail } from '@/lib/email/resend'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request) {
   try {
     const { user, role: callerRole } = await getAuthUser()
