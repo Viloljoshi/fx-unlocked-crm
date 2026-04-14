@@ -13,8 +13,9 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
-import { Calendar, Plus, Search, Clock, CheckCircle2, Download, ChevronRight, Trash2, Pencil } from 'lucide-react'
+import { Calendar, Plus, Search, Clock, CheckCircle2, Download, ChevronRight, Trash2, Pencil, Link2, Link2Off, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { useUserRole } from '@/lib/hooks/useUserRole'
 
 const TYPE_COLORS = { MEETING:'bg-blue-50 text-blue-700 border-blue-200', CALL:'bg-green-50 text-green-700 border-green-200', FOLLOW_UP:'bg-purple-50 text-purple-700 border-purple-200' }
@@ -34,10 +35,87 @@ export default function AppointmentsPage() {
   const [saving, setSaving] = useState(false)
   const [selected, setSelected] = useState(new Set())
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [googleConnected, setGoogleConnected] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const supabase = createClient()
   const { userId, role, loading: roleLoading } = useUserRole()
+  const searchParams = useSearchParams()
   const isAdmin = role === 'ADMIN'
   const canWrite = role === 'ADMIN' || role === 'STAFF'
+
+  // Check Google Calendar connection status
+  useEffect(() => {
+    checkGoogleStatus()
+  }, [])
+
+  // Handle Google OAuth callback query params
+  useEffect(() => {
+    const googleParam = searchParams.get('google')
+    if (googleParam === 'connected') {
+      toast.success('Google Calendar connected!')
+      setGoogleConnected(true)
+      window.history.replaceState({}, '', '/dashboard/appointments')
+    } else if (googleParam === 'error') {
+      toast.error('Failed to connect Google Calendar. Try again.')
+      window.history.replaceState({}, '', '/dashboard/appointments')
+    }
+  }, [searchParams])
+
+  const checkGoogleStatus = async () => {
+    try {
+      const res = await fetch('/api/auth/google/status', { credentials: 'include' })
+      const data = await res.json()
+      setGoogleConnected(data.connected)
+    } catch { /* ignore */ }
+  }
+
+  const connectGoogle = async () => {
+    setGoogleLoading(true)
+    try {
+      const res = await fetch('/api/auth/google/connect', { credentials: 'include' })
+      const data = await res.json()
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        toast.error('Failed to get Google auth URL')
+      }
+    } catch (err) {
+      toast.error('Failed to connect Google Calendar')
+    } finally {
+      setGoogleLoading(false)
+    }
+  }
+
+  const disconnectGoogle = async () => {
+    const res = await fetch('/api/auth/google/disconnect', { method: 'POST', credentials: 'include' })
+    if (res.ok) {
+      setGoogleConnected(false)
+      toast.success('Google Calendar disconnected')
+    }
+  }
+
+  const syncToCalendar = async (appointmentId, action = 'create') => {
+    if (!googleConnected) return
+    try {
+      const res = await fetch('/api/calendar/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ appointmentId, action }),
+      })
+      const data = await res.json()
+      if (data.needsConnect) {
+        setGoogleConnected(false)
+        toast.error('Google Calendar session expired. Please reconnect.')
+        return
+      }
+      if (data.success) {
+        toast.success(`Synced to Google Calendar`)
+      }
+    } catch (err) {
+      console.error('[CalSync] Error:', err)
+    }
+  }
 
   useEffect(() => {
     if (roleLoading || !userId || !role) return
@@ -95,14 +173,24 @@ export default function AppointmentsPage() {
     if (!form.affiliate_id||!form.title||!form.scheduled_at) { toast.error('Affiliate, title and date required'); return }
     setSaving(true)
     const payload = { ...form, scheduled_at: new Date(form.scheduled_at).toISOString() }
-    let error
+    let error, data
     if (editTarget) {
       ({ error } = await supabase.from('appointments').update(payload).eq('id', editTarget.id))
+      data = editTarget
     } else {
-      ({ error } = await supabase.from('appointments').insert({ ...payload, user_id: userId }))
+      const result = await supabase.from('appointments').insert({ ...payload, user_id: userId }).select().single()
+      error = result.error
+      data = result.data
     }
     if (error) { toast.error(error.message); setSaving(false); return }
     toast.success(editTarget ? 'Appointment updated' : 'Appointment scheduled!')
+
+    // Auto-sync to Google Calendar if connected
+    if (googleConnected && data?.id) {
+      const action = editTarget ? 'update' : 'create'
+      syncToCalendar(data.id, action)
+    }
+
     setAddOpen(false); setSaving(false); load()
   }
 
@@ -158,6 +246,16 @@ export default function AppointmentsPage() {
         </div>
         <div className="flex items-center gap-2">
           {canWrite && selected.size>0&&<Button variant="destructive" size="sm" onClick={()=>setDeleteConfirm(true)}><Trash2 className="w-4 h-4 mr-1" />Delete {selected.size}</Button>}
+          {googleConnected ? (
+            <Button variant="outline" size="sm" onClick={disconnectGoogle} className="text-green-600 border-green-200 hover:bg-green-50">
+              <Link2 className="w-4 h-4 mr-1" />Calendar Synced
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" onClick={connectGoogle} disabled={googleLoading}>
+              {googleLoading ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Link2Off className="w-4 h-4 mr-1" />}
+              Connect Google Calendar
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={exportCSV}><Download className="w-4 h-4 mr-1" />Export</Button>
           {canWrite && <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-1" />Schedule</Button>}
         </div>
@@ -221,6 +319,7 @@ export default function AppointmentsPage() {
                                 <p className="font-semibold text-sm">{a.title}</p>
                                 <Badge className={`text-xs ${TYPE_COLORS[a.appointment_type]||''}`}>{a.appointment_type.replace('_',' ')}</Badge>
                                 <Badge className={`text-xs ${STATUS_COLORS[a.status]||''}`}>{a.status}</Badge>
+                                {a.google_event_id&&<Badge className="text-xs bg-blue-50 text-blue-600 border-blue-200">📅 Synced</Badge>}
                                 {isVU&&<Badge className="text-xs bg-red-50 text-red-700 border-red-200">Today!</Badge>}
                               </div>
                               <Link href={`/dashboard/affiliates/${a.affiliate_id}`} className="text-sm text-primary hover:underline flex items-center gap-1 mt-1 w-fit" onClick={e=>e.stopPropagation()}>

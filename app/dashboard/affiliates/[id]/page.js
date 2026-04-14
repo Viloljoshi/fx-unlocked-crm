@@ -289,13 +289,44 @@ export default function AffiliateDetailPage() {
       return
     }
     toast.success('Note added')
+
+    // AI follow-up detection — fire and forget, don't block the UI
+    const savedContent = noteContent.trim()
     setNoteContent('')
     setNoteType('GENERAL')
     setNoteDialogOpen(false)
     setNoteSaving(false)
+
     // Refresh notes list
     const { data } = await supabase.from('affiliate_notes').select('*').eq('affiliate_id', id).order('created_at', { ascending: false })
     setNotes(data || [])
+
+    // AI detection in background
+    try {
+      const aiRes = await fetch('/api/calendar/ai-detect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          noteContent: savedContent,
+          affiliateId: id,
+          affiliateName: affiliate?.name,
+          autoSync: true,
+        }),
+      })
+      const aiData = await aiRes.json()
+      if (aiData.detected && aiData.appointmentCreated) {
+        toast.success(
+          `AI detected a follow-up! "${aiData.result.title}" scheduled for ${new Date(aiData.result.scheduled_at).toLocaleString()}${aiData.googleSynced ? ' (synced to Google Calendar)' : ''}`,
+          { duration: 6000 }
+        )
+        // Refresh appointments
+        const { data: apptData } = await supabase.from('appointments').select('*').eq('affiliate_id', id).order('scheduled_at', { ascending: false })
+        setAppointments(apptData || [])
+      }
+    } catch (aiErr) {
+      console.log('[AIDetect] Background check failed:', aiErr)
+    }
   }
 
   if (loading) return <div className="space-y-4">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>
