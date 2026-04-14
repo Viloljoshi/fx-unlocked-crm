@@ -8,7 +8,7 @@ const BASE = 'https://crm.fx-unlocked.com'
 
 export async function GET(request) {
   try {
-    const { searchParams } = new URL(request.url)
+    const { searchParams } = request.nextUrl
     const code = searchParams.get('code')
     const state = searchParams.get('state')
     const error = searchParams.get('error')
