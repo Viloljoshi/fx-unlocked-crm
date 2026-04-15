@@ -36,7 +36,8 @@ const EMPTY_FORM = {
   country: '', website: '', deal_terms: '', notes: '',
   deal_data: {}, // deal-type-specific fields stored in deal_details.deal JSONB
   trade_ideas: '',
-  instagram: false, telegram: false, signal_handle: false,
+  instagram: '', telegram: '', signal_handle: '',
+  telegram_free: '', telegram_vip: '', community_name: '',
   inline_deals: [], // multi-deal: array of {id, broker_id, deal_type, deal_notes, status}
 }
 
@@ -281,7 +282,8 @@ export default function AffiliatesPage() {
       deal_terms: a.deal_terms || '', notes: a.notes || '',
       deal_data: a.deal_details?.deal || {},
       trade_ideas: a.trade_ideas || '',
-      instagram: a.instagram || false, telegram: a.telegram || false, signal_handle: a.signal_handle || false,
+      instagram: a.instagram || '', telegram: a.telegram || '', signal_handle: a.signal_handle || '',
+      telegram_free: a.telegram_free || '', telegram_vip: a.telegram_vip || '', community_name: a.community_name || '',
       inline_deals: existingDeals,
     })
     setAddOpen(true)
@@ -629,28 +631,38 @@ export default function AffiliatesPage() {
                   placeholder="Search or type AM name..."
                 />
               </div>
+              <div className="space-y-1.5 flex items-end pb-0.5">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox checked={!!form.trade_ideas} onCheckedChange={v => setForm(f => ({...f, trade_ideas: v ? 'yes' : ''}))} />
+                  <span className="text-sm font-medium">Trade Ideas</span>
+                </label>
+              </div>
               <div className="col-span-2 space-y-1.5">
                 <Label>Website</Label>
                 <Input value={form.website} onChange={e => setForm(f => ({...f, website: e.target.value}))} placeholder="https://..." />
               </div>
-              <div className="col-span-2 flex items-center gap-6 pt-1 flex-wrap">
-                <span className="text-sm font-medium">Channels</span>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <Checkbox checked={form.instagram || false} onCheckedChange={v => setForm(f => ({...f, instagram: !!v}))} />
-                  <span className="text-sm">Instagram</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <Checkbox checked={form.telegram || false} onCheckedChange={v => setForm(f => ({...f, telegram: !!v}))} />
-                  <span className="text-sm">Telegram</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <Checkbox checked={form.signal_handle || false} onCheckedChange={v => setForm(f => ({...f, signal_handle: !!v}))} />
-                  <span className="text-sm">Signal</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <Checkbox checked={!!form.trade_ideas} onCheckedChange={v => setForm(f => ({...f, trade_ideas: v ? 'yes' : ''}))} />
-                  <span className="text-sm">Trade Ideas</span>
-                </label>
+              <div className="col-span-2 pt-2 border-t">
+                <span className="text-sm font-semibold">Channels</span>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Instagram</Label>
+                <Input value={form.instagram} onChange={e => setForm(f => ({...f, instagram: e.target.value}))} placeholder="@handle" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Telegram Username</Label>
+                <Input value={form.telegram} onChange={e => setForm(f => ({...f, telegram: e.target.value}))} placeholder="@username" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Telegram Free</Label>
+                <Input value={form.telegram_free} onChange={e => setForm(f => ({...f, telegram_free: e.target.value}))} placeholder="t.me/..." />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Telegram VIP</Label>
+                <Input value={form.telegram_vip} onChange={e => setForm(f => ({...f, telegram_vip: e.target.value}))} placeholder="t.me/..." />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Community Name</Label>
+                <Input value={form.community_name} onChange={e => setForm(f => ({...f, community_name: e.target.value}))} placeholder="Community name..." />
               </div>
               {/* Inline Deals Section — multiple deals per partner */}
               <InlineDeals
