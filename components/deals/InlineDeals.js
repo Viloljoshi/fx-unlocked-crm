@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -23,6 +24,7 @@ const EMPTY_DEAL = {
   deal_type: '',
   deal_notes: '',
   deal_data: {},
+  broker_user_id: '',
   status: 'ACTIVE',
 }
 
@@ -188,6 +190,17 @@ export default function InlineDeals({ deals = [], brokers = [], onChange, readOn
                   </div>
                 )}
 
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Broker User ID</Label>
+                    <Input
+                      value={deal.broker_user_id || ''}
+                      onChange={e => updateDeal(index, 'broker_user_id', e.target.value)}
+                      placeholder="e.g. 12345678"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Deal Notes</Label>
                   <Textarea

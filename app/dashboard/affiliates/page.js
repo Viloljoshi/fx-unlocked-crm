@@ -217,7 +217,7 @@ export default function AffiliatesPage() {
       affQuery,
       supabase.from('brokers').select('id, name'),
       supabase.from('profiles').select('id, first_name, last_name, role'),
-      supabase.from('deals').select('id, affiliate_id, broker_id, deal_type, deal_notes, deal_details, status').order('created_at', { ascending: true }),
+      supabase.from('deals').select('id, affiliate_id, broker_id, deal_type, deal_notes, deal_details, broker_user_id, status').order('created_at', { ascending: true }),
     ])
     setAffiliates(affRes.data || [])
     setBrokers(brkRes.data || [])
@@ -270,6 +270,7 @@ export default function AffiliatesPage() {
       deal_type: d.deal_type || '',
       deal_notes: d.deal_notes || '',
       deal_data: d.deal_details?.deal || {},
+      broker_user_id: d.broker_user_id || '',
       status: d.status || 'ACTIVE',
     }))
     setForm({
@@ -374,6 +375,7 @@ export default function AffiliatesPage() {
           broker_id: deal.broker_id || null,
           deal_type: deal.deal_type,
           deal_notes: deal.deal_notes || null,
+          broker_user_id: deal.broker_user_id || null,
           deal_details: dealDetails,
           status: deal.status || 'ACTIVE',
         }).eq('id', deal.id)
@@ -384,6 +386,7 @@ export default function AffiliatesPage() {
           broker_id: deal.broker_id || null,
           deal_type: deal.deal_type,
           deal_notes: deal.deal_notes || null,
+          broker_user_id: deal.broker_user_id || null,
           deal_details: dealDetails,
           status: deal.status || 'ACTIVE',
           created_by: userId,

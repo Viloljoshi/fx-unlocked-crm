@@ -21,6 +21,7 @@ import Link from 'next/link'
 import { useUserRole } from '@/lib/hooks/useUserRole'
 import DealTypeFields from '@/components/deal-type-fields/DealTypeFields'
 import AffiliateCombobox from '@/components/affiliate-combobox/AffiliateCombobox'
+import InlineDeals from '@/components/deals/InlineDeals'
 
 function BrokerMultiSelect({ brokers, value = [], onChange }) {
   const [open, setOpen] = useState(false)
@@ -153,6 +154,7 @@ export default function AffiliateDetailPage() {
   const [editForm, setEditForm] = useState({})
   const [editManagerNameFree, setEditManagerNameFree] = useState('')
   const [editDealData, setEditDealData] = useState({})
+  const [editInlineDeals, setEditInlineDeals] = useState([])
   const [dealNotes, setDealNotes] = useState('')
   const [saving, setSaving] = useState(false)
   // Add Note state
@@ -208,7 +210,7 @@ export default function AffiliateDetailPage() {
       supabase.from('affiliate_notes').select('*').eq('affiliate_id', id).order('created_at', { ascending: false }),
       supabase.from('appointments').select('*').eq('affiliate_id', id).order('scheduled_at', { ascending: false }),
       supabase.from('commissions').select('*, deal_id').eq('affiliate_id', id).order('year', { ascending: false }),
-      supabase.from('deals').select('id, affiliate_id, broker_id, deal_type, deal_notes, status, deal_details, created_at').eq('affiliate_id', id).order('created_at', { ascending: true }),
+      supabase.from('deals').select('id, affiliate_id, broker_id, deal_type, deal_notes, broker_user_id, status, deal_details, created_at').eq('affiliate_id', id).order('created_at', { ascending: true }),
     ])
     setNotes(notesRes.data || [])
     setAppointments(apptRes.data || [])
@@ -257,6 +259,40 @@ export default function AffiliateDetailPage() {
     if (brokerIds.length > 0) {
       await supabase.from('affiliate_brokers').insert(brokerIds.map(bid => ({ affiliate_id: id, broker_id: bid })))
     }
+
+    // Sync inline deals
+    const existingDealIds = affiliateDeals.map(d => d.id)
+    const keptDealIds = editInlineDeals.filter(d => d.id).map(d => d.id)
+    const removedDealIds = existingDealIds.filter(did => !keptDealIds.includes(did))
+    if (removedDealIds.length > 0) {
+      await supabase.from('deals').delete().in('id', removedDealIds)
+    }
+    for (const deal of editInlineDeals) {
+      if (!deal.deal_type) continue
+      const dealDetails = deal.deal_data && Object.keys(deal.deal_data).length > 0 ? { deal: deal.deal_data } : {}
+      if (deal.id) {
+        await supabase.from('deals').update({
+          broker_id: deal.broker_id || null,
+          deal_type: deal.deal_type,
+          deal_notes: deal.deal_notes || null,
+          broker_user_id: deal.broker_user_id || null,
+          deal_details: dealDetails,
+          status: deal.status || 'ACTIVE',
+        }).eq('id', deal.id)
+      } else {
+        await supabase.from('deals').insert({
+          affiliate_id: id,
+          broker_id: deal.broker_id || null,
+          deal_type: deal.deal_type,
+          deal_notes: deal.deal_notes || null,
+          broker_user_id: deal.broker_user_id || null,
+          deal_details: dealDetails,
+          status: deal.status || 'ACTIVE',
+          created_by: userId,
+        })
+      }
+    }
+
     toast.success('Affiliate updated')
     setEditOpen(false)
     setSaving(false)
@@ -382,6 +418,15 @@ export default function AffiliateDetailPage() {
             })
             setEditManagerNameFree(affiliate.deal_details?.account_manager_name || '')
             setEditDealData(affiliate.deal_details?.deal || {})
+            setEditInlineDeals(affiliateDeals.map(d => ({
+              id: d.id,
+              broker_id: d.broker_id || '',
+              deal_type: d.deal_type || '',
+              deal_notes: d.deal_notes || '',
+              deal_data: d.deal_details?.deal || {},
+              broker_user_id: d.broker_user_id || '',
+              status: d.status || 'ACTIVE',
+            })))
             setEditOpen(true)
           }}>
             <Edit2 className="w-4 h-4 mr-1" /> Edit
@@ -776,16 +821,6 @@ export default function AffiliateDetailPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Deal Type</Label>
-                <Select value={editForm.deal_type || '__none__'} onValueChange={v => { const dt = v === '__none__' ? '' : v; setEditForm(f => ({...f, deal_type: dt})); if (dt !== editForm.deal_type) setEditDealData({}); }}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">None</SelectItem>
-                    {['CPA','PNL','HYBRID','REBATES'].map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
                 <Label>Master IB</Label>
                 <AffiliateCombobox
                   affiliates={allAffiliates}
@@ -794,10 +829,6 @@ export default function AffiliateDetailPage() {
                   excludeId={id}
                   placeholder="Search Master IB..."
                 />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Brokers</Label>
-                <BrokerMultiSelect brokers={brokers} value={editForm.broker_ids || []} onChange={v => setEditForm(f => ({...f, broker_ids: v}))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Account Manager</Label>
@@ -810,43 +841,50 @@ export default function AffiliateDetailPage() {
                   onChangeText={setEditManagerNameFree}
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label>Trade Ideas</Label>
-                <Input value={editForm.trade_ideas || ''} onChange={e => setEditForm(f => ({...f, trade_ideas: e.target.value}))} placeholder="e.g. Forex signals, Copy trading..." />
+              <div className="space-y-1.5 flex items-end pb-0.5">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox checked={!!editForm.trade_ideas} onCheckedChange={v => setEditForm(f => ({...f, trade_ideas: v ? 'yes' : ''}))} />
+                  <span className="text-sm font-medium">Trade Ideas</span>
+                </label>
               </div>
               <div className="col-span-2 space-y-1.5">
                 <Label>Website</Label>
                 <Input value={editForm.website || ''} onChange={e => setEditForm(f => ({...f, website: e.target.value}))} />
               </div>
-              <div className="col-span-2 flex items-center gap-6 pt-1">
-                <span className="text-sm font-medium">Channels</span>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <Checkbox checked={editForm.instagram || false} onCheckedChange={v => setEditForm(f => ({...f, instagram: !!v}))} />
-                  <span className="text-sm">Instagram</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <Checkbox checked={editForm.telegram || false} onCheckedChange={v => setEditForm(f => ({...f, telegram: !!v}))} />
-                  <span className="text-sm">Telegram</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <Checkbox checked={editForm.signal_handle || false} onCheckedChange={v => setEditForm(f => ({...f, signal_handle: !!v}))} />
-                  <span className="text-sm">Signal</span>
-                </label>
+              {/* Channels — text fields */}
+              <div className="col-span-2 pt-2 border-t">
+                <span className="text-sm font-semibold">Channels</span>
               </div>
-              <div className="col-span-2 space-y-1.5">
-                <Label>Deal Terms</Label>
-                <Input value={editForm.deal_terms || ''} onChange={e => setEditForm(f => ({...f, deal_terms: e.target.value}))} />
+              <div className="space-y-1.5">
+                <Label>Instagram</Label>
+                <Input value={editForm.instagram || ''} onChange={e => setEditForm(f => ({...f, instagram: e.target.value}))} placeholder="@handle" />
               </div>
+              <div className="space-y-1.5">
+                <Label>Telegram Username</Label>
+                <Input value={editForm.telegram || ''} onChange={e => setEditForm(f => ({...f, telegram: e.target.value}))} placeholder="@username" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Telegram Free</Label>
+                <Input value={editForm.telegram_free || ''} onChange={e => setEditForm(f => ({...f, telegram_free: e.target.value}))} placeholder="t.me/..." />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Telegram VIP</Label>
+                <Input value={editForm.telegram_vip || ''} onChange={e => setEditForm(f => ({...f, telegram_vip: e.target.value}))} placeholder="t.me/..." />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Community Name</Label>
+                <Input value={editForm.community_name || ''} onChange={e => setEditForm(f => ({...f, community_name: e.target.value}))} placeholder="Community name..." />
+              </div>
+              {/* Inline Deals */}
+              <InlineDeals
+                deals={editInlineDeals}
+                brokers={brokers}
+                onChange={setEditInlineDeals}
+              />
               <div className="col-span-2 space-y-1.5">
                 <Label>Notes</Label>
                 <Input value={editForm.notes || ''} onChange={e => setEditForm(f => ({...f, notes: e.target.value}))} />
               </div>
-              {/* Dynamic deal-type-specific fields */}
-              <DealTypeFields
-                dealType={editForm.deal_type}
-                dealData={editDealData}
-                onChange={setEditDealData}
-              />
             </div>
             <div className="flex gap-2 justify-end pt-2">
               <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
