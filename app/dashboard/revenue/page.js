@@ -23,12 +23,13 @@ import {
 const MONTHS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const DEAL_TYPES = ['CPA','PNL','HYBRID','REBATES']
 const DEAL_TYPE_COLORS = { CPA: '#93c5fd', PNL: '#c4b5fd', HYBRID: '#86efac', REBATES: '#fde68a' }
-const EMPTY_FORM = { affiliate_id: '', broker_id: 'none', month: new Date().getMonth()+1, year: new Date().getFullYear(), deal_type: 'CPA', revenue_amount: '', notes: '', status: 'PENDING' }
+const EMPTY_FORM = { affiliate_id: '', broker_id: 'none', deal_id: '', month: new Date().getMonth()+1, year: new Date().getFullYear(), deal_type: 'CPA', revenue_amount: '', notes: '', status: 'PENDING' }
 
 export default function RevenuePage() {
   const [commissions, setCommissions] = useState([])
   const [affiliates, setAffiliates] = useState([])
   const [brokers, setBrokers] = useState([])
+  const [affiliateDeals, setAffiliateDeals] = useState([]) // deals for deal-aware selector
   const [loading, setLoading] = useState(true)
   const [yearFilter, setYearFilter] = useState('all')
   const [monthFilter, setMonthFilter] = useState('all')
@@ -55,9 +56,10 @@ export default function RevenuePage() {
     let affQuery = supabase.from('affiliates').select('id, name')
     if (role !== 'ADMIN') affQuery = affQuery.eq('manager_id', userId)
 
-    const [affRes, brkRes] = await Promise.all([
+    const [affRes, brkRes, dealsRes] = await Promise.all([
       affQuery,
       supabase.from('brokers').select('id, name'),
+      supabase.from('deals').select('id, affiliate_id, broker_id, deal_type, deal_notes, status').in('status', ['ACTIVE', 'DRAFT', 'PENDING']),
     ])
 
     const myAffiliates = affRes.data || []
@@ -66,14 +68,25 @@ export default function RevenuePage() {
     // no additional client-side filter needed.
     const { data: commData } = await supabase
       .from('commissions')
-      .select('*')
+      .select('*, deal_id')
       .order('year', { ascending: false })
       .order('month', { ascending: false })
 
     setCommissions(commData || [])
     setAffiliates(myAffiliates)
     setBrokers(brkRes.data || [])
+    setAffiliateDeals(dealsRes.data || [])
     setLoading(false)
+  }
+
+  // Get deals for a specific affiliate (for the revenue form dropdown)
+  const getDealsForAffiliate = (affiliateId) =>
+    affiliateDeals.filter(d => d.affiliate_id === affiliateId)
+
+  // Build deal label: "CPA - Startrader"
+  const getDealLabel = (deal) => {
+    const brokerName = brokers.find(b => b.id === deal.broker_id)?.name || 'No Broker'
+    return `${deal.deal_type} - ${brokerName}`
   }
 
   const getAffName = (id) => affiliates.find(a=>a.id===id)?.name || '-'
@@ -102,7 +115,7 @@ export default function RevenuePage() {
   const openEdit = (c, e) => {
     e?.stopPropagation()
     setEditTarget(c)
-    setForm({ affiliate_id: c.affiliate_id, broker_id: c.broker_id || 'none', month: c.month, year: c.year, deal_type: c.deal_type, revenue_amount: c.revenue_amount, notes: c.notes || '', status: c.status || 'PENDING' })
+    setForm({ affiliate_id: c.affiliate_id, broker_id: c.broker_id || 'none', deal_id: c.deal_id || '', month: c.month, year: c.year, deal_type: c.deal_type, revenue_amount: c.revenue_amount, notes: c.notes || '', status: c.status || 'PENDING' })
     setAddOpen(true)
   }
 
@@ -111,7 +124,8 @@ export default function RevenuePage() {
     if (parseFloat(form.revenue_amount) <= 0) { toast.error('Amount must be greater than 0'); return }
     setSaving(true)
     const payload = { ...form, month: parseInt(form.month), year: parseInt(form.year), revenue_amount: parseFloat(form.revenue_amount) }
-    if (!payload.broker_id || payload.broker_id === 'none') delete payload.broker_id
+    if (!payload.broker_id || payload.broker_id === 'none') payload.broker_id = null
+    if (!payload.deal_id) payload.deal_id = null
     let error
     if (editTarget) {
       ({ error } = await supabase.from('commissions').update(payload).eq('id', editTarget.id))
@@ -268,17 +282,20 @@ export default function RevenuePage() {
               <TableHeader>
                 <TableRow className="bg-muted/50">
                   {canWrite && <TableHead className="w-10"><Checkbox checked={selected.size===filtered.length&&filtered.length>0} onCheckedChange={toggleAll} /></TableHead>}
-                  <TableHead>Affiliate</TableHead><TableHead>Broker</TableHead><TableHead>Period</TableHead><TableHead>Deal Type</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead>
+                  <TableHead>Affiliate</TableHead><TableHead>Deal</TableHead><TableHead>Broker</TableHead><TableHead>Period</TableHead><TableHead>Deal Type</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead>
                   <TableHead className="w-20">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length===0 ? (
-                  <TableRow><TableCell colSpan={canWrite ? 8 : 7} className="text-center py-10 text-muted-foreground"><DollarSign className="w-8 h-8 mx-auto mb-2 opacity-30" />No commissions found.</TableCell></TableRow>
-                ) : filtered.map(c => (
+                  <TableRow><TableCell colSpan={canWrite ? 10 : 9} className="text-center py-10 text-muted-foreground"><DollarSign className="w-8 h-8 mx-auto mb-2 opacity-30" />No commissions found.</TableCell></TableRow>
+                ) : filtered.map(c => {
+                  const linkedDeal = c.deal_id ? affiliateDeals.find(d => d.id === c.deal_id) : null
+                  return (
                   <TableRow key={c.id} className={`hover:bg-muted/30 transition-colors ${canWrite ? 'cursor-pointer' : ''} ${selected.has(c.id)?'bg-blue-50/50':''}`} onClick={()=>canWrite && openEdit(c)}>
                     {canWrite && <TableCell onClick={e=>e.stopPropagation()}><Checkbox checked={selected.has(c.id)} onCheckedChange={()=>toggleSelect(c.id)} /></TableCell>}
                     <TableCell className="font-medium">{getAffName(c.affiliate_id)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{linkedDeal ? getDealLabel(linkedDeal) : <span className="italic">—</span>}</TableCell>
                     <TableCell className="text-sm">{getBrkName(c.broker_id)}</TableCell>
                     <TableCell className="text-sm">{MONTHS[c.month]} {c.year}</TableCell>
                     <TableCell><Badge variant="outline" className="text-xs">{c.deal_type}</Badge></TableCell>
@@ -291,7 +308,7 @@ export default function RevenuePage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                )})}
               </TableBody>
             </Table>
           </div>
@@ -304,15 +321,48 @@ export default function RevenuePage() {
           <DialogHeader><DialogTitle>{editTarget ? 'Edit Commission' : 'Add Commission'}</DialogTitle></DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-1.5"><Label>Affiliate <span className="text-destructive">*</span></Label>
-              <Select value={form.affiliate_id} onValueChange={v=>setForm(f=>({...f,affiliate_id:v}))}><SelectTrigger><SelectValue placeholder="Select affiliate" /></SelectTrigger><SelectContent>{affiliates.map(a=><SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select>
+              <Select value={form.affiliate_id} onValueChange={v=>{
+                const deals = getDealsForAffiliate(v)
+                // Auto-select first deal if affiliate has deals
+                if (deals.length === 1) {
+                  setForm(f=>({...f, affiliate_id:v, deal_id: deals[0].id, broker_id: deals[0].broker_id || 'none', deal_type: deals[0].deal_type}))
+                } else {
+                  setForm(f=>({...f, affiliate_id:v, deal_id: '', broker_id: 'none', deal_type: 'CPA'}))
+                }
+              }}><SelectTrigger><SelectValue placeholder="Select affiliate" /></SelectTrigger><SelectContent>{affiliates.map(a=><SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select>
             </div>
+            {/* Deal selector — shows deals for selected affiliate */}
+            {form.affiliate_id && getDealsForAffiliate(form.affiliate_id).length > 0 && (
+              <div className="space-y-1.5">
+                <Label>Deal <span className="text-xs text-muted-foreground ml-1">(auto-fills broker & type)</span></Label>
+                <Select value={form.deal_id || '__manual__'} onValueChange={v=>{
+                  if (v === '__manual__') {
+                    setForm(f=>({...f, deal_id: '', broker_id: 'none', deal_type: 'CPA'}))
+                  } else {
+                    const deal = affiliateDeals.find(d => d.id === v)
+                    if (deal) {
+                      setForm(f=>({...f, deal_id: v, broker_id: deal.broker_id || 'none', deal_type: deal.deal_type}))
+                    }
+                  }
+                }}>
+                  <SelectTrigger><SelectValue placeholder="Select deal..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__manual__">Manual entry (no deal link)</SelectItem>
+                    {getDealsForAffiliate(form.affiliate_id).map(d=>(
+                      <SelectItem key={d.id} value={d.id}>{getDealLabel(d)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-1.5"><Label>Broker</Label>
-              <Select value={form.broker_id} onValueChange={v=>setForm(f=>({...f,broker_id:v}))}><SelectTrigger><SelectValue placeholder="Select broker" /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{brokers.map(b=><SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent></Select>
+              <Select value={form.broker_id} onValueChange={v=>setForm(f=>({...f,broker_id:v}))} disabled={!!form.deal_id}><SelectTrigger><SelectValue placeholder="Select broker" /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{brokers.map(b=><SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent></Select>
+              {form.deal_id && <p className="text-xs text-muted-foreground mt-0.5">Auto-filled from deal selection</p>}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>Month</Label><Select value={form.month.toString()} onValueChange={v=>setForm(f=>({...f,month:parseInt(v)}))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{MONTHS.slice(1).map((m,i)=><SelectItem key={i+1} value={(i+1).toString()}>{m}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Year</Label><Select value={form.year.toString()} onValueChange={v=>setForm(f=>({...f,year:parseInt(v)}))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{[2023,2024,2025,2026].map(y=><SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}</SelectContent></Select></div>
-              <div className="space-y-1.5"><Label>Deal Type</Label><Select value={form.deal_type} onValueChange={v=>setForm(f=>({...f,deal_type:v}))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{DEAL_TYPES.map(d=><SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1.5"><Label>Deal Type</Label><Select value={form.deal_type} onValueChange={v=>setForm(f=>({...f,deal_type:v}))} disabled={!!form.deal_id}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{DEAL_TYPES.map(d=><SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Amount ($) <span className="text-destructive">*</span></Label><Input value={form.revenue_amount} onChange={e=>setForm(f=>({...f,revenue_amount:e.target.value}))} placeholder="0.00" type="number" min="0" /></div>
             </div>
             <div className="space-y-1.5"><Label>Status</Label><Select value={form.status} onValueChange={v=>setForm(f=>({...f,status:v}))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="PENDING">Pending</SelectItem><SelectItem value="PAID">Paid</SelectItem><SelectItem value="AWAITED">Awaited</SelectItem><SelectItem value="CANCELLED">Cancelled</SelectItem></SelectContent></Select></div>

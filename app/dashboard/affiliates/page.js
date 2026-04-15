@@ -19,6 +19,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useUserRole } from '@/lib/hooks/useUserRole'
 import DealTypeFields from '@/components/deal-type-fields/DealTypeFields'
 import AffiliateCombobox from '@/components/affiliate-combobox/AffiliateCombobox'
+import InlineDeals from '@/components/deals/InlineDeals'
 
 const STATUS_COLORS = {
   ACTIVE: 'bg-green-50 text-green-700 border-green-200',
@@ -36,6 +37,7 @@ const EMPTY_FORM = {
   deal_data: {}, // deal-type-specific fields stored in deal_details.deal JSONB
   trade_ideas: '',
   instagram: false, telegram: false, signal_handle: false,
+  inline_deals: [], // multi-deal: array of {id, broker_id, deal_type, deal_notes, status}
 }
 
 function BrokerMultiSelect({ brokers, value = [], onChange }) {
@@ -202,22 +204,28 @@ export default function AffiliatesPage() {
     load()
   }, [roleLoading, userId, role])
 
+  const [allDeals, setAllDeals] = useState([]) // all deals keyed by affiliate_id
+
   const load = async () => {
     setLoading(true)
     // Staff see only their own affiliates; admin sees all
     let affQuery = supabase.from('affiliates').select('*, affiliate_brokers(broker_id)').order('created_at', { ascending: false })
     if (role && role !== 'ADMIN') affQuery = affQuery.eq('manager_id', userId)
 
-    const [affRes, brkRes, profRes] = await Promise.all([
+    const [affRes, brkRes, profRes, dealsRes] = await Promise.all([
       affQuery,
       supabase.from('brokers').select('id, name'),
       supabase.from('profiles').select('id, first_name, last_name, role'),
+      supabase.from('deals').select('id, affiliate_id, broker_id, deal_type, deal_notes, status').order('created_at', { ascending: true }),
     ])
     setAffiliates(affRes.data || [])
     setBrokers(brkRes.data || [])
     setProfiles(profRes.data || [])
+    setAllDeals(dealsRes.data || [])
     setLoading(false)
   }
+
+  const getDealsForAffiliate = (affiliateId) => allDeals.filter(d => d.affiliate_id === affiliateId)
 
   const getBrokerNames = (affiliateBrokers) => {
     const names = (affiliateBrokers || []).map(ab => brokers.find(b => b.id === ab.broker_id)?.name).filter(Boolean)
@@ -255,6 +263,13 @@ export default function AffiliatesPage() {
   const openEdit = (a, e) => {
     e?.stopPropagation()
     setEditTarget(a)
+    const existingDeals = getDealsForAffiliate(a.id).map(d => ({
+      id: d.id,
+      broker_id: d.broker_id || '',
+      deal_type: d.deal_type || '',
+      deal_notes: d.deal_notes || '',
+      status: d.status || 'ACTIVE',
+    }))
     setForm({
       name: a.name, email: a.email, phone: a.phone || '',
       status: a.status, deal_type: a.deal_type || '',
@@ -266,6 +281,7 @@ export default function AffiliatesPage() {
       deal_data: a.deal_details?.deal || {},
       trade_ideas: a.trade_ideas || '',
       instagram: a.instagram || false, telegram: a.telegram || false, signal_handle: a.signal_handle || false,
+      inline_deals: existingDeals,
     })
     setAddOpen(true)
   }
@@ -276,9 +292,10 @@ export default function AffiliatesPage() {
     const brokerIds = form.broker_ids || []
     const payload = { ...form }
 
-    // Remove non-column fields
+    // Remove non-column fields (these are form-only, not DB columns)
     delete payload.broker_ids
     delete payload.affiliate_brokers
+    delete payload.inline_deals
 
     // Handle FK references: convert 'none' → null
     if (!payload.manager_id || payload.manager_id === 'none') { payload.manager_id = null }
@@ -327,6 +344,48 @@ export default function AffiliatesPage() {
     await supabase.from('affiliate_brokers').delete().eq('affiliate_id', savedId)
     if (brokerIds.length > 0) {
       await supabase.from('affiliate_brokers').insert(brokerIds.map(bid => ({ affiliate_id: savedId, broker_id: bid })))
+    }
+
+    // Sync inline deals — upsert new/updated deals, delete removed ones
+    const inlineDeals = form.inline_deals || []
+    const existingDealIds = editTarget
+      ? getDealsForAffiliate(editTarget.id).map(d => d.id)
+      : []
+    const keptDealIds = inlineDeals.filter(d => d.id).map(d => d.id)
+    const removedDealIds = existingDealIds.filter(id => !keptDealIds.includes(id))
+
+    // Delete removed deals
+    if (removedDealIds.length > 0) {
+      await supabase.from('deals').delete().in('id', removedDealIds)
+    }
+
+    // Upsert deals (update existing, insert new)
+    for (const deal of inlineDeals) {
+      if (!deal.deal_type) continue // skip deals without a type
+      if (deal.id) {
+        // Update existing deal — only update mutable fields, never overwrite created_by
+        await supabase.from('deals').update({
+          broker_id: deal.broker_id || null,
+          deal_type: deal.deal_type,
+          deal_notes: deal.deal_notes || null,
+          status: deal.status || 'ACTIVE',
+        }).eq('id', deal.id)
+      } else {
+        // Insert new deal
+        const { error: dealErr } = await supabase.from('deals').insert({
+          affiliate_id: savedId,
+          broker_id: deal.broker_id || null,
+          deal_type: deal.deal_type,
+          deal_notes: deal.deal_notes || null,
+          status: deal.status || 'ACTIVE',
+          deal_details: {},
+          created_by: userId,
+        })
+        if (dealErr) {
+          console.error('Failed to create deal:', dealErr)
+          toast.error(`Failed to create deal: ${dealErr.message}`)
+        }
+      }
     }
 
     // Send status-change email to the affiliate if status changed (or new affiliate with a notifiable status)
@@ -480,7 +539,25 @@ export default function AffiliatesPage() {
                     <TableCell className="font-medium">{a.name}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{a.email}</TableCell>
                     <TableCell><Badge className={STATUS_COLORS[a.status] || ''}>{a.status}</Badge></TableCell>
-                    <TableCell>{a.deal_type ? <Badge variant="outline" className="text-xs">{a.deal_type}</Badge> : <span className="text-xs text-muted-foreground">-</span>}</TableCell>
+                    <TableCell>
+                      {(() => {
+                        const deals = getDealsForAffiliate(a.id)
+                        if (deals.length > 0) {
+                          return (
+                            <div className="flex flex-wrap gap-1">
+                              {deals.map(d => (
+                                <Badge key={d.id} variant="outline" className="text-xs">
+                                  {d.deal_type}{d.broker_id ? ` · ${brokers.find(b => b.id === d.broker_id)?.name || ''}` : ''}
+                                </Badge>
+                              ))}
+                            </div>
+                          )
+                        }
+                        return a.deal_type
+                          ? <Badge variant="outline" className="text-xs">{a.deal_type}</Badge>
+                          : <span className="text-xs text-muted-foreground">-</span>
+                      })()}
+                    </TableCell>
                     <TableCell className="text-sm">{getMasterIBName(a.master_ib_id)}</TableCell>
                     <TableCell className="text-sm">{getBrokerNames(a.affiliate_brokers)}</TableCell>
                     <TableCell className="text-sm">{getManagerName(a)}</TableCell>
@@ -584,6 +661,12 @@ export default function AffiliatesPage() {
                   <span className="text-sm">Signal</span>
                 </label>
               </div>
+              {/* Inline Deals Section — multiple deals per partner */}
+              <InlineDeals
+                deals={form.inline_deals || []}
+                brokers={brokers}
+                onChange={deals => setForm(f => ({...f, inline_deals: deals}))}
+              />
               <div className="col-span-2 space-y-1.5">
                 <Label>Deal Terms</Label>
                 <Input value={form.deal_terms} onChange={e => setForm(f => ({...f, deal_terms: e.target.value}))} placeholder="e.g. $200 CPA, 30% RevShare" />
@@ -592,7 +675,7 @@ export default function AffiliatesPage() {
                 <Label>Notes</Label>
                 <Input value={form.notes} onChange={e => setForm(f => ({...f, notes: e.target.value}))} placeholder="Additional notes..." />
               </div>
-              {/* Dynamic deal-type-specific fields */}
+              {/* Dynamic deal-type-specific fields (legacy — kept for backwards compat) */}
               <DealTypeFields
                 dealType={form.deal_type}
                 dealData={form.deal_data}

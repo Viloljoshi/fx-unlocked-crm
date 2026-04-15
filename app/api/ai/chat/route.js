@@ -13,14 +13,15 @@ async function fetchContext(message) {
   const supabase = createAdminClient()
 
   // Fetch ALL core data — no artificial limits
-  const [affiliatesRes, brokersRes, commissionsRes, appointmentsRes, kpisRes, staffKpisRes, profilesRes] = await Promise.all([
-    supabase.from('affiliates').select('id, name, email, deal_type, status, broker_id, manager_id, master_ib_id, country, source, renewal_date, deal_details, created_at').order('created_at', { ascending: false }),
+  const [affiliatesRes, brokersRes, commissionsRes, appointmentsRes, kpisRes, staffKpisRes, profilesRes, dealsRes] = await Promise.all([
+    supabase.from('affiliates').select('id, name, email, deal_type, status, manager_id, master_ib_id, country, source, renewal_date, deal_details, created_at').order('created_at', { ascending: false }),
     supabase.from('brokers').select('id, name, is_active, deal_types, account_manager, contact_email').order('name'),
-    supabase.from('commissions').select('id, month, year, deal_type, revenue_amount, status, affiliate_id, broker_id, paid_date').order('year', { ascending: false }).order('month', { ascending: false }),
+    supabase.from('commissions').select('id, month, year, deal_type, revenue_amount, status, affiliate_id, broker_id, deal_id, paid_date').order('year', { ascending: false }).order('month', { ascending: false }),
     supabase.from('appointments').select('id, title, affiliate_id, scheduled_at, appointment_type, status, notes').order('scheduled_at', { ascending: false }).limit(50),
     supabase.from('company_kpis').select('id, year, month, target_revenue, target_affiliates, target_commissions').order('year', { ascending: false }).order('month', { ascending: true }),
     supabase.from('staff_kpis').select('id, staff_member_id, year, quarter, month, target_revenue, actual_revenue, target_affiliates, actual_affiliates').order('year', { ascending: false }),
     supabase.from('profiles').select('id, first_name, last_name, role, email'),
+    supabase.from('deals').select('id, affiliate_id, broker_id, deal_type, status, deal_notes, created_at').order('created_at', { ascending: false }),
   ])
 
   const affiliates    = affiliatesRes.data   || []
@@ -30,6 +31,7 @@ async function fetchContext(message) {
   const kpis          = kpisRes.data          || []
   const staffKpis     = staffKpisRes.data     || []
   const profiles      = profilesRes.data      || []
+  const deals         = dealsRes.data         || []
 
   // ── Lookup maps ──────────────────────────────────────────────────────────────
   const affiliateMap  = Object.fromEntries(affiliates.map(a => [a.id, a.name]))
@@ -113,6 +115,48 @@ async function fetchContext(message) {
     revByDeal[c.deal_type].count += 1
   })
   context.revenueByDealType = Object.values(revByDeal).sort((a,b) => b.total - a.total)
+
+  // ── Deals summary (multi-deal per partner) ──────────────────────────────────
+  const dealMap = Object.fromEntries(deals.map(d => [d.id, d]))
+  context.totalDeals = deals.length
+  context.activeDeals = deals.filter(d => d.status === 'ACTIVE').length
+  context.dealsSummary = deals.map(d => {
+    const affName = affiliateMap[d.affiliate_id] || d.affiliate_id
+    const brkName = d.broker_id ? (brokerMap[d.broker_id] || d.broker_id) : 'No Broker'
+    const dealComms = commissions.filter(c => c.deal_id === d.id)
+    const dealRevenue = dealComms.reduce((s, c) => s + Number(c.revenue_amount || 0), 0)
+    const dealPaid = dealComms.filter(c => c.status === 'PAID').reduce((s, c) => s + Number(c.revenue_amount || 0), 0)
+    return {
+      dealId: d.id,
+      affiliate: affName,
+      broker: brkName,
+      dealType: d.deal_type,
+      status: d.status,
+      revenue: dealRevenue,
+      paidRevenue: dealPaid,
+      commissionCount: dealComms.length,
+      label: `${affName} - ${d.deal_type} - ${brkName}`,
+    }
+  }).sort((a, b) => b.revenue - a.revenue)
+
+  // ── Revenue by deal (affiliate + broker + type breakdown) ───────────────────
+  // This enables questions like "Show me Lewis Page's revenue by deal"
+  const revBySpecificDeal = {}
+  commissions.forEach(c => {
+    if (!c.deal_id) return
+    const d = dealMap[c.deal_id]
+    if (!d) return
+    const affName = affiliateMap[c.affiliate_id] || c.affiliate_id
+    const brkName = c.broker_id ? (brokerMap[c.broker_id] || c.broker_id) : 'No Broker'
+    const label = `${affName} - ${c.deal_type} - ${brkName}`
+    if (!revBySpecificDeal[label]) revBySpecificDeal[label] = { label, affiliate: affName, broker: brkName, dealType: c.deal_type, total: 0, paid: 0, pending: 0, count: 0 }
+    const amt = Number(c.revenue_amount || 0)
+    revBySpecificDeal[label].total += amt
+    revBySpecificDeal[label].count += 1
+    if (c.status === 'PAID') revBySpecificDeal[label].paid += amt
+    if (c.status === 'PENDING' || c.status === 'AWAITED') revBySpecificDeal[label].pending += amt
+  })
+  context.revenueBySpecificDeal = Object.values(revBySpecificDeal).sort((a,b) => b.total - a.total)
 
   // ── Company KPIs actuals vs targets (fully resolved, per month) ───────────────
   context.companyKpiTargets = kpis.map(k => {
@@ -246,6 +290,7 @@ You have access to LIVE, pre-computed CRM data below. **Always base answers on t
 |--------|-------|
 | Total Affiliates | ${context.totalAffiliates} (${context.activeAffiliates} active, ${context.leadAffiliates} leads, ${context.onboardingAffiliates} onboarding, ${context.inactiveAffiliates} inactive) |
 | Total Brokers | ${context.totalBrokers} (${context.activeBrokers} active) |
+| Total Deals | ${context.totalDeals} (${context.activeDeals} active) |
 | Total Revenue (all time) | ${fmt(context.totalRevenue)} |
 | Paid Revenue | ${fmt(context.paidRevenue)} |
 | Pending / Awaited | ${fmt(context.pendingRevenue)} |
@@ -269,6 +314,12 @@ ${JSON.stringify(context.revenueByBroker, null, 1)}
 
 ### Revenue by Deal Type
 ${JSON.stringify(context.revenueByDealType, null, 1)}
+
+### Revenue by Specific Deal (affiliate + broker + type breakdown)
+${JSON.stringify(context.revenueBySpecificDeal, null, 1)}
+
+### Deals Summary (all deals per partner — each partner can have multiple deals with different brokers)
+${JSON.stringify(context.dealsSummary, null, 1)}
 
 ### Company KPI Targets vs Actuals (per month)
 ${JSON.stringify(context.companyKpiTargets, null, 1)}

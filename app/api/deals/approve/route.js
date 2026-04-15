@@ -80,9 +80,17 @@ export async function GET(request) {
       .update({ status: 'ACTIVE', approved_at: new Date().toISOString() })
       .eq('id', tokenRecord.deal_id)
 
-    // Move affiliate from ONBOARDING to ACTIVE if needed
+    // Move affiliate from ONBOARDING to ACTIVE only if this is their first ACTIVE deal
     if (deal.affiliate?.status === 'ONBOARDING') {
-      await supabase.from('affiliates').update({ status: 'ACTIVE' }).eq('id', deal.affiliate_id)
+      const { count } = await supabase
+        .from('deals')
+        .select('id', { count: 'exact', head: true })
+        .eq('affiliate_id', deal.affiliate_id)
+        .eq('status', 'ACTIVE')
+      // count includes the deal we just activated above
+      if (count && count <= 1) {
+        await supabase.from('affiliates').update({ status: 'ACTIVE' }).eq('id', deal.affiliate_id)
+      }
     }
 
     // Version + audit + note (non-critical)

@@ -52,12 +52,20 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: updateErr.message }, { status: 500 })
     }
 
-    // If approving and affiliate is ONBOARDING, move to ACTIVE
+    // If approving and affiliate is ONBOARDING, move to ACTIVE only if this is their first ACTIVE deal
     if (action === 'approve' && deal.affiliate?.status === 'ONBOARDING') {
-      await supabase
-        .from('affiliates')
-        .update({ status: 'ACTIVE' })
-        .eq('id', deal.affiliate_id)
+      const { count } = await supabase
+        .from('deals')
+        .select('id', { count: 'exact', head: true })
+        .eq('affiliate_id', deal.affiliate_id)
+        .eq('status', 'ACTIVE')
+      // count includes the deal we just activated; only upgrade affiliate on first active deal
+      if (count && count <= 1) {
+        await supabase
+          .from('affiliates')
+          .update({ status: 'ACTIVE' })
+          .eq('id', deal.affiliate_id)
+      }
     }
 
     // Invalidate any pending approval tokens

@@ -16,7 +16,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { ArrowLeft, Mail, Phone, Globe, MapPin, Calendar, Edit2, Save, X, ChevronDown, Plus, Users, StickyNote } from 'lucide-react'
+import { ArrowLeft, Mail, Phone, Globe, MapPin, Calendar, Edit2, Save, X, ChevronDown, Plus, Users, StickyNote, Handshake } from 'lucide-react'
 import Link from 'next/link'
 import { useUserRole } from '@/lib/hooks/useUserRole'
 import DealTypeFields from '@/components/deal-type-fields/DealTypeFields'
@@ -147,6 +147,7 @@ export default function AffiliateDetailPage() {
   const [notes, setNotes] = useState([])
   const [appointments, setAppointments] = useState([])
   const [commissions, setCommissions] = useState([])
+  const [affiliateDeals, setAffiliateDeals] = useState([]) // multi-deal: all deals for this affiliate
   const [loading, setLoading] = useState(true)
   const [editOpen, setEditOpen] = useState(false)
   const [editForm, setEditForm] = useState({})
@@ -203,14 +204,16 @@ export default function AffiliateDetailPage() {
     }
     setBrokers(brkListRes.data || [])
     setProfiles(profListRes.data || [])
-    const [notesRes, apptRes, commRes] = await Promise.all([
+    const [notesRes, apptRes, commRes, dealsRes] = await Promise.all([
       supabase.from('affiliate_notes').select('*').eq('affiliate_id', id).order('created_at', { ascending: false }),
       supabase.from('appointments').select('*').eq('affiliate_id', id).order('scheduled_at', { ascending: false }),
-      supabase.from('commissions').select('*').eq('affiliate_id', id).order('year', { ascending: false }),
+      supabase.from('commissions').select('*, deal_id').eq('affiliate_id', id).order('year', { ascending: false }),
+      supabase.from('deals').select('id, affiliate_id, broker_id, deal_type, deal_notes, status, deal_details, created_at').eq('affiliate_id', id).order('created_at', { ascending: true }),
     ])
     setNotes(notesRes.data || [])
     setAppointments(apptRes.data || [])
     setCommissions(commRes.data || [])
+    setAffiliateDeals(dealsRes.data || [])
     setLoading(false)
   }
 
@@ -353,9 +356,18 @@ export default function AffiliateDetailPage() {
           </Link>
           <div>
             <h1 className="text-2xl font-outfit font-bold">{affiliate.name}</h1>
-            <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
               <Badge className={STATUS_COLORS[affiliate.status] || ''}>{affiliate.status}</Badge>
-              {affiliate.deal_type ? <Badge variant="outline" className="text-xs">{affiliate.deal_type}</Badge> : <Badge variant="outline" className="text-xs text-muted-foreground">No Deal Type</Badge>}
+              {affiliateDeals.length > 0
+                ? affiliateDeals.map(d => (
+                    <Badge key={d.id} variant="outline" className="text-xs">
+                      {d.deal_type}{d.broker_id ? ` · ${brokers.find(b => b.id === d.broker_id)?.name || ''}` : ''}
+                    </Badge>
+                  ))
+                : affiliate.deal_type
+                  ? <Badge variant="outline" className="text-xs">{affiliate.deal_type}</Badge>
+                  : <Badge variant="outline" className="text-xs text-muted-foreground">No Deals</Badge>
+              }
             </div>
           </div>
         </div>
@@ -470,6 +482,61 @@ export default function AffiliateDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Deals — all deals for this partner */}
+      {affiliateDeals.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Handshake className="w-4 h-4" /> Deals ({affiliateDeals.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {affiliateDeals.map(deal => {
+                const brokerName = brokers.find(b => b.id === deal.broker_id)?.name || 'No Broker'
+                const dealRevenue = commissions
+                  .filter(c => c.deal_id === deal.id)
+                  .reduce((s, c) => s + Number(c.revenue_amount || 0), 0)
+                const dealCommCount = commissions.filter(c => c.deal_id === deal.id).length
+                const statusColor = deal.status === 'ACTIVE'
+                  ? 'bg-green-50 text-green-700 border-green-200'
+                  : deal.status === 'PENDING'
+                    ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                    : deal.status === 'DRAFT'
+                      ? 'bg-gray-50 text-gray-700 border-gray-200'
+                      : 'bg-red-50 text-red-700 border-red-200'
+                const dealTypeColor = {
+                  CPA: 'bg-blue-50 text-blue-700 border-blue-200',
+                  PNL: 'bg-purple-50 text-purple-700 border-purple-200',
+                  HYBRID: 'bg-green-50 text-green-700 border-green-200',
+                  REBATES: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+                }[deal.deal_type] || ''
+
+                return (
+                  <Card key={deal.id} className="border-l-4 border-l-primary/40 hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => router.push(`/dashboard/deals/${deal.id}`)}>
+                    <CardContent className="pt-4 pb-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Badge className={dealTypeColor}>{deal.deal_type}</Badge>
+                        <Badge className={statusColor} variant="outline">{deal.status}</Badge>
+                      </div>
+                      <p className="font-medium text-sm">{brokerName}</p>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t">
+                        <span>Revenue: <span className="font-semibold text-green-600">${dealRevenue.toLocaleString()}</span></span>
+                        <span>{dealCommCount} commission{dealCommCount !== 1 ? 's' : ''}</span>
+                      </div>
+                      {deal.deal_notes && (
+                        <p className="text-xs text-muted-foreground truncate">{deal.deal_notes}</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Sub-Affiliates */}
       {subAffiliates.length > 0 && (
