@@ -216,7 +216,7 @@ export default function AffiliatesPage() {
       affQuery,
       supabase.from('brokers').select('id, name'),
       supabase.from('profiles').select('id, first_name, last_name, role'),
-      supabase.from('deals').select('id, affiliate_id, broker_id, deal_type, deal_notes, status').order('created_at', { ascending: true }),
+      supabase.from('deals').select('id, affiliate_id, broker_id, deal_type, deal_notes, deal_details, status').order('created_at', { ascending: true }),
     ])
     setAffiliates(affRes.data || [])
     setBrokers(brkRes.data || [])
@@ -268,6 +268,7 @@ export default function AffiliatesPage() {
       broker_id: d.broker_id || '',
       deal_type: d.deal_type || '',
       deal_notes: d.deal_notes || '',
+      deal_data: d.deal_details?.deal || {},
       status: d.status || 'ACTIVE',
     }))
     setForm({
@@ -362,12 +363,16 @@ export default function AffiliatesPage() {
     // Upsert deals (update existing, insert new)
     for (const deal of inlineDeals) {
       if (!deal.deal_type) continue // skip deals without a type
+      const dealDetails = deal.deal_data && Object.keys(deal.deal_data).length > 0
+        ? { deal: deal.deal_data }
+        : {}
       if (deal.id) {
         // Update existing deal — only update mutable fields, never overwrite created_by
         await supabase.from('deals').update({
           broker_id: deal.broker_id || null,
           deal_type: deal.deal_type,
           deal_notes: deal.deal_notes || null,
+          deal_details: dealDetails,
           status: deal.status || 'ACTIVE',
         }).eq('id', deal.id)
       } else {
@@ -377,8 +382,8 @@ export default function AffiliatesPage() {
           broker_id: deal.broker_id || null,
           deal_type: deal.deal_type,
           deal_notes: deal.deal_notes || null,
+          deal_details: dealDetails,
           status: deal.status || 'ACTIVE',
-          deal_details: {},
           created_by: userId,
         })
         if (dealErr) {
@@ -547,7 +552,7 @@ export default function AffiliatesPage() {
                             <div className="flex flex-wrap gap-1">
                               {deals.map(d => (
                                 <Badge key={d.id} variant="outline" className="text-xs">
-                                  {d.deal_type}{d.broker_id ? ` · ${brokers.find(b => b.id === d.broker_id)?.name || ''}` : ''}
+                                  {d.deal_type}
                                 </Badge>
                               ))}
                             </div>
@@ -603,16 +608,6 @@ export default function AffiliatesPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Deal Type</Label>
-                <Select value={form.deal_type || '__none__'} onValueChange={v => setForm(f => ({...f, deal_type: v === '__none__' ? '' : v, deal_data: v === '__none__' ? {} : (v !== f.deal_type ? {} : f.deal_data)}))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">None</SelectItem>
-                    {['CPA','PNL','HYBRID','REBATES'].map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
                 <Label>Master IB</Label>
                 <AffiliateCombobox
                   affiliates={affiliates}
@@ -621,10 +616,6 @@ export default function AffiliatesPage() {
                   excludeId={editTarget?.id}
                   placeholder="Search Master IB..."
                 />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Brokers</Label>
-                <BrokerMultiSelect brokers={brokers} value={form.broker_ids} onChange={v => setForm(f => ({...f, broker_ids: v}))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Account Manager</Label>
@@ -638,15 +629,11 @@ export default function AffiliatesPage() {
                   placeholder="Search or type AM name..."
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label>Trade Ideas</Label>
-                <Input value={form.trade_ideas} onChange={e => setForm(f => ({...f, trade_ideas: e.target.value}))} placeholder="e.g. Forex signals, Copy trading..." />
-              </div>
               <div className="col-span-2 space-y-1.5">
                 <Label>Website</Label>
                 <Input value={form.website} onChange={e => setForm(f => ({...f, website: e.target.value}))} placeholder="https://..." />
               </div>
-              <div className="col-span-2 flex items-center gap-6 pt-1">
+              <div className="col-span-2 flex items-center gap-6 pt-1 flex-wrap">
                 <span className="text-sm font-medium">Channels</span>
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <Checkbox checked={form.instagram || false} onCheckedChange={v => setForm(f => ({...f, instagram: !!v}))} />
@@ -660,6 +647,10 @@ export default function AffiliatesPage() {
                   <Checkbox checked={form.signal_handle || false} onCheckedChange={v => setForm(f => ({...f, signal_handle: !!v}))} />
                   <span className="text-sm">Signal</span>
                 </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <Checkbox checked={!!form.trade_ideas} onCheckedChange={v => setForm(f => ({...f, trade_ideas: v ? 'yes' : ''}))} />
+                  <span className="text-sm">Trade Ideas</span>
+                </label>
               </div>
               {/* Inline Deals Section — multiple deals per partner */}
               <InlineDeals
@@ -668,19 +659,9 @@ export default function AffiliatesPage() {
                 onChange={deals => setForm(f => ({...f, inline_deals: deals}))}
               />
               <div className="col-span-2 space-y-1.5">
-                <Label>Deal Terms</Label>
-                <Input value={form.deal_terms} onChange={e => setForm(f => ({...f, deal_terms: e.target.value}))} placeholder="e.g. $200 CPA, 30% RevShare" />
-              </div>
-              <div className="col-span-2 space-y-1.5">
                 <Label>Notes</Label>
                 <Input value={form.notes} onChange={e => setForm(f => ({...f, notes: e.target.value}))} placeholder="Additional notes..." />
               </div>
-              {/* Dynamic deal-type-specific fields (legacy — kept for backwards compat) */}
-              <DealTypeFields
-                dealType={form.deal_type}
-                dealData={form.deal_data}
-                onChange={data => setForm(f => ({...f, deal_data: data}))}
-              />
             </div>
             <div className="flex gap-2 justify-end pt-2">
               <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>

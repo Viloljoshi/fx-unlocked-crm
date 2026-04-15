@@ -1,14 +1,13 @@
 'use client'
 
-import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Plus, Trash2, Handshake } from 'lucide-react'
+import DealTypeFields from '@/components/deal-type-fields/DealTypeFields'
 
 const DEAL_TYPES = ['CPA', 'PNL', 'HYBRID', 'REBATES']
 const DEAL_TYPE_COLORS = {
@@ -19,17 +18,17 @@ const DEAL_TYPE_COLORS = {
 }
 
 const EMPTY_DEAL = {
-  id: null,        // null = new deal, UUID = existing deal
+  id: null,
   broker_id: '',
   deal_type: '',
   deal_notes: '',
+  deal_data: {},
   status: 'ACTIVE',
 }
 
 /**
  * InlineDeals — manages multiple deals within the affiliate create/edit form.
- *
- * @param {{ deals: Array, brokers: Array, onChange: (deals: Array) => void, readOnly?: boolean }} props
+ * Each deal has its own broker, deal type, deal-type-specific fields, and notes.
  */
 export default function InlineDeals({ deals = [], brokers = [], onChange, readOnly = false }) {
   const addDeal = () => {
@@ -156,7 +155,14 @@ export default function InlineDeals({ deals = [], brokers = [], onChange, readOn
                     <Label className="text-xs">Deal Type</Label>
                     <Select
                       value={deal.deal_type || '__none__'}
-                      onValueChange={v => updateDeal(index, 'deal_type', v === '__none__' ? '' : v)}
+                      onValueChange={v => {
+                        const newType = v === '__none__' ? '' : v
+                        // Reset deal_data when type changes to avoid stale fields
+                        const updated = deals.map((d, i) =>
+                          i === index ? { ...d, deal_type: newType, deal_data: newType !== d.deal_type ? {} : d.deal_data } : d
+                        )
+                        onChange(updated)
+                      }}
                     >
                       <SelectTrigger className="h-8 text-xs">
                         <SelectValue placeholder="Select type..." />
@@ -170,6 +176,18 @@ export default function InlineDeals({ deals = [], brokers = [], onChange, readOn
                     </Select>
                   </div>
                 </div>
+
+                {/* Deal-type-specific fields (CPA tiers, rebates, PNL, etc.) */}
+                {deal.deal_type && (
+                  <div className="border rounded-lg p-3 bg-muted/20">
+                    <DealTypeFields
+                      dealType={deal.deal_type}
+                      dealData={deal.deal_data || {}}
+                      onChange={data => updateDeal(index, 'deal_data', data)}
+                    />
+                  </div>
+                )}
+
                 <div className="space-y-1.5">
                   <Label className="text-xs">Deal Notes</Label>
                   <Textarea

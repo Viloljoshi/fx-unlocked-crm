@@ -332,6 +332,7 @@ export default function TasksPage() {
   // ── Save Task ──────────────────────────────────────────────────
   async function handleSave() {
     if (!form.title.trim()) { toast.error('Title is required'); return }
+    if (!userId) { toast.error('Session not ready — please refresh and try again'); return }
     setSaving(true)
 
     const payload = {
@@ -345,7 +346,7 @@ export default function TasksPage() {
 
     if (editing) {
       const { error } = await supabase.from('tasks').update(payload).eq('id', editing.id)
-      if (error) { toast.error('Failed to update task'); setSaving(false); return }
+      if (error) { toast.error('Failed to update task: ' + (error.message || 'Unknown error')); setSaving(false); return }
       toast.success('Task updated')
 
       // Email: if owner changed (reassigned), notify new assignee
@@ -358,8 +359,18 @@ export default function TasksPage() {
         sendTaskNotify({ type: 'completed', createdBy: editing.created_by, title: payload.title, priority: payload.priority })
       }
     } else {
-      const { error } = await supabase.from('tasks').insert({ ...payload, created_by: userId })
-      if (error) { toast.error('Failed to create task'); setSaving(false); return }
+      const insertPayload = { ...payload, created_by: userId }
+      const { data: insertedTask, error } = await supabase.from('tasks').insert(insertPayload).select('id').single()
+      if (error) {
+        const msg = error.message || ''
+        if (msg.includes('violates row-level security') || msg.includes('RLS')) {
+          toast.error('Permission denied. Your account may not have task creation rights. Contact an admin.')
+        } else {
+          toast.error('Failed to create task: ' + msg)
+        }
+        setSaving(false)
+        return
+      }
       toast.success('Task created')
 
       // Email: if assigned to someone on creation, notify assignee
