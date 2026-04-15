@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Plus, Trash2, Handshake } from 'lucide-react'
@@ -200,15 +199,6 @@ export default function InlineDeals({ deals = [], brokers = [], onChange, readOn
                       className="h-8 text-xs"
                     />
                   </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Deal Notes</Label>
-                  <Textarea
-                    value={deal.deal_notes || ''}
-                    onChange={e => updateDeal(index, 'deal_notes', e.target.value)}
-                    placeholder="Notes about this deal arrangement..."
-                    className="min-h-[60px] text-xs"
-                  />
                 </div>
               </CardContent>
             </Card>
