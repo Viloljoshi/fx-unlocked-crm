@@ -9,6 +9,19 @@ export async function POST(request) {
     const { email } = await request.json()
     if (!email) return NextResponse.json({ error: 'Email is required' }, { status: 400 })
 
+    // SECURITY: Only allow password resets for internal CRM users
+    const ALLOWED_DOMAINS = ['fx-unlocked.com']
+    const ALLOWED_EMAILS = ['joshivilol1011@gmail.com']
+    const normalised = email.toLowerCase().trim()
+    const domain = normalised.split('@')[1] || ''
+    const isAllowed = ALLOWED_DOMAINS.includes(domain) || ALLOWED_EMAILS.includes(normalised)
+
+    if (!isAllowed) {
+      // Return success to prevent email enumeration, but do NOT send anything
+      console.warn('[ForgotPassword] Blocked reset attempt for external email:', normalised)
+      return NextResponse.json({ success: true })
+    }
+
     const supabase = createAdminClient()
 
     // Look up first name for personalised email — non-fatal if not found
