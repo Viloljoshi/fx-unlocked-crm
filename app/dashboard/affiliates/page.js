@@ -398,26 +398,9 @@ export default function AffiliatesPage() {
       }
     }
 
-    // Send status-change email to the affiliate if status changed (or new affiliate with a notifiable status)
-    const prevStatus = editTarget?.status
-    const newStatus = payload.status
-    const notifiableStatuses = ['ACTIVE', 'ONBOARDING', 'INACTIVE']
-    if (notifiableStatuses.includes(newStatus) && newStatus !== prevStatus) {
-      // Fetch broker names for the approved email (non-blocking — don't await)
-      const brokerNames = brokerIds.length > 0
-        ? (await supabase.from('brokers').select('name').in('id', brokerIds)).data?.map(b => b.name).join(', ')
-        : null
-      fetch('/api/affiliates/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: payload.email,
-          name: payload.name,
-          status: newStatus,
-          brokers: brokerNames,
-        }),
-      }).catch(err => console.error('Affiliate notify (non-fatal):', err))
-    }
+    // NOTE: External affiliate emails have been DISABLED.
+    // Affiliates/partners must NEVER receive automated emails from the CRM.
+    // All email functionality is strictly internal (staff only).
 
     toast.success(editTarget ? 'Affiliate updated' : 'Affiliate added successfully')
     setAddOpen(false)

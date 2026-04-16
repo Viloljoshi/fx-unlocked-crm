@@ -28,6 +28,24 @@ export async function middleware(request) {
 
   const pathname = request.nextUrl.pathname
 
+  // Domain restriction: only @fx-unlocked.com + joshivilol1011@gmail.com can access the CRM
+  const ALLOWED_DOMAINS = ['fx-unlocked.com']
+  const ALLOWED_EMAILS = ['joshivilol1011@gmail.com']
+
+  if (user && pathname.startsWith('/dashboard')) {
+    const email = user.email?.toLowerCase() || ''
+    const domain = email.split('@')[1] || ''
+    const isAllowed = ALLOWED_DOMAINS.includes(domain) || ALLOWED_EMAILS.includes(email)
+    if (!isAllowed) {
+      // Sign them out and redirect to login with an error
+      await supabase.auth.signOut()
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      url.searchParams.set('error', 'unauthorized_domain')
+      return NextResponse.redirect(url)
+    }
+  }
+
   // Public pages — allow without auth
   const publicPaths = ['/', '/privacy', '/terms']
   if (!user && publicPaths.includes(pathname)) {
