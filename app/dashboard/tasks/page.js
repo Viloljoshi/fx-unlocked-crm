@@ -205,6 +205,12 @@ export default function TasksPage() {
   const [newNote, setNewNote] = useState('')
   const [addingNote, setAddingNote] = useState(false)
 
+  // comments
+  const [taskComments, setTaskComments] = useState({}) // { taskId: [comments] }
+  const [commentsLoading, setCommentsLoading] = useState({})
+  const [newComment, setNewComment] = useState('')
+  const [addingComment, setAddingComment] = useState(false)
+
   // ── Email Notification (server handles email lookup) ──────────
   async function sendTaskNotify(payload) {
     try {
@@ -428,8 +434,12 @@ export default function TasksPage() {
     }
     setExpandedTask(taskId)
     setNewNote('')
+    setNewComment('')
     if (!taskNotes[taskId]) {
       await loadNotes(taskId)
+    }
+    if (!taskComments[taskId]) {
+      await loadComments(taskId)
     }
   }
 
@@ -473,6 +483,51 @@ export default function TasksPage() {
     setTaskNotes(prev => ({
       ...prev,
       [taskId]: (prev[taskId] || []).filter(n => n.id !== noteId),
+    }))
+  }
+
+  // ── Comments ─────────────────────────────────────────────────
+  async function loadComments(taskId) {
+    setCommentsLoading(prev => ({ ...prev, [taskId]: true }))
+    const { data, error } = await supabase
+      .from('task_comments')
+      .select('*, author:profiles!task_comments_created_by_fkey(id,first_name,last_name,email)')
+      .eq('task_id', taskId)
+      .order('created_at', { ascending: true })
+
+    if (!error) {
+      setTaskComments(prev => ({ ...prev, [taskId]: data || [] }))
+    } else {
+      const plain = await supabase.from('task_comments').select('*').eq('task_id', taskId).order('created_at', { ascending: true })
+      setTaskComments(prev => ({ ...prev, [taskId]: plain.data || [] }))
+    }
+    setCommentsLoading(prev => ({ ...prev, [taskId]: false }))
+  }
+
+  async function handleAddComment(taskId) {
+    const content = newComment.trim()
+    if (!content) return
+    if (content.length > 5000) { toast.error('Comment is too long (max 5000 chars)'); return }
+    setAddingComment(true)
+    const { error } = await supabase.from('task_comments').insert({
+      task_id: taskId,
+      content,
+      created_by: userId,
+    })
+    if (error) { toast.error('Failed to add comment'); setAddingComment(false); return }
+    toast.success('Comment added')
+    setNewComment('')
+    setAddingComment(false)
+    await loadComments(taskId)
+  }
+
+  async function handleDeleteComment(commentId, taskId) {
+    const { error } = await supabase.from('task_comments').delete().eq('id', commentId)
+    if (error) { toast.error('Failed to delete comment'); return }
+    toast.success('Comment deleted')
+    setTaskComments(prev => ({
+      ...prev,
+      [taskId]: (prev[taskId] || []).filter(c => c.id !== commentId),
     }))
   }
 
@@ -683,6 +738,8 @@ export default function TasksPage() {
                 const isExpanded = expandedTask === task.id
                 const notes = taskNotes[task.id] || []
                 const noteCount = notes.length
+                const comments = taskComments[task.id] || []
+                const commentCount = comments.length
 
                 return (
                   <React.Fragment key={task.id}>
@@ -702,7 +759,7 @@ export default function TasksPage() {
                             'mt-0.5 p-0.5 rounded transition-all hover:bg-muted shrink-0',
                             isExpanded && 'text-primary'
                           )}
-                          title={isExpanded ? 'Collapse notes' : 'Expand notes'}
+                          title={isExpanded ? 'Collapse notes & comments' : 'Expand notes & comments'}
                         >
                           <ChevronRight className={cn('w-4 h-4 transition-transform', isExpanded && 'rotate-90')} />
                         </button>
@@ -712,9 +769,15 @@ export default function TasksPage() {
                               {task.title}
                             </span>
                             {noteCount > 0 && (
-                              <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
-                                <MessageSquare className="w-3 h-3" />
+                              <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground" title={`${noteCount} note${noteCount === 1 ? '' : 's'}`}>
+                                <StickyNote className="w-3 h-3" />
                                 {noteCount}
+                              </span>
+                            )}
+                            {commentCount > 0 && (
+                              <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground" title={`${commentCount} comment${commentCount === 1 ? '' : 's'}`}>
+                                <MessageSquare className="w-3 h-3" />
+                                {commentCount}
                               </span>
                             )}
                           </div>
@@ -934,6 +997,86 @@ export default function TasksPage() {
                               </Button>
                             </div>
                           )}
+
+                          {/* ── Comments section ─────────────────────── */}
+                          <div className="pt-4 mt-2 border-t border-border/40 space-y-3">
+                            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                              <MessageSquare className="w-3.5 h-3.5" />
+                              Comments {commentCount > 0 && `(${commentCount})`}
+                            </div>
+
+                            {commentsLoading[task.id] && (
+                              <div className="space-y-2">
+                                <Skeleton className="h-10 w-full rounded" />
+                                <Skeleton className="h-10 w-3/4 rounded" />
+                              </div>
+                            )}
+
+                            {!commentsLoading[task.id] && comments.length === 0 && (
+                              <p className="text-xs text-muted-foreground italic">No comments yet. Be the first to comment.</p>
+                            )}
+
+                            {!commentsLoading[task.id] && comments.map(comment => {
+                              const commentAuthor = comment.author || staff.find(s => s.id === comment.created_by)
+                              return (
+                                <div key={comment.id} className="group/comment flex gap-3 items-start">
+                                  <div className="w-6 h-6 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[10px] font-semibold flex items-center justify-center shrink-0 ring-1 ring-blue-500/20 mt-0.5">
+                                    {getInitials(commentAuthor)}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-xs font-medium">{fullName(commentAuthor)}</span>
+                                      <span className="text-[11px] text-muted-foreground">{formatNoteDate(comment.created_at)}</span>
+                                      {comment.edited && (
+                                        <span className="text-[10px] text-muted-foreground italic">(edited)</span>
+                                      )}
+                                    </div>
+                                    <p className="text-sm text-foreground/90 mt-0.5 whitespace-pre-wrap break-words">{comment.content}</p>
+                                  </div>
+                                  {(isAdmin || comment.created_by === userId) && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 opacity-0 group-hover/comment:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-destructive"
+                                      onClick={() => handleDeleteComment(comment.id, task.id)}
+                                      title="Delete comment"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </Button>
+                                  )}
+                                </div>
+                              )
+                            })}
+
+                            {!commentsLoading[task.id] && (
+                              <div className="flex gap-2 items-end pt-1">
+                                <Textarea
+                                  placeholder="Write a comment..."
+                                  value={newComment}
+                                  onChange={e => setNewComment(e.target.value)}
+                                  rows={1}
+                                  maxLength={5000}
+                                  className="resize-none text-sm min-h-[36px] flex-1 bg-background"
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                      e.preventDefault()
+                                      handleAddComment(task.id)
+                                    }
+                                  }}
+                                />
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  className="h-9 gap-1.5 shrink-0"
+                                  onClick={() => handleAddComment(task.id)}
+                                  disabled={addingComment || !newComment.trim()}
+                                >
+                                  <Send className="w-3.5 h-3.5" />
+                                  {addingComment ? 'Posting...' : 'Comment'}
+                                </Button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </td>
                     </tr>
